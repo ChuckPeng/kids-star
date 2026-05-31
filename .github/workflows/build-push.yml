@@ -27,6 +27,8 @@ jobs:
         id: meta
         with:
           images: wsofdan/kids-star
+          flavor: |
+            latest=false
           tags: |
             type=raw,value=beta,enable=${{ github.ref_type == 'branch' }}
             type=sha,prefix=sha-,format=short,enable=${{ github.ref_type == 'branch' }}
