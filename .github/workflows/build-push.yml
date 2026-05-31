@@ -3,7 +3,6 @@ name: Build and Push Docker Image
 on:
   push:
     branches: [main]
-    tags: ['v*']
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -13,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: docker/setup-buildx-action@v3
 
@@ -22,6 +23,14 @@ jobs:
           username: wsofdan
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Get version tag
+        id: version
+        run: |
+          TAG=$(git tag --sort=-creatordate --list 'v*' | head -1)
+          if [ -z "$TAG" ]; then TAG="v0.1.0-beta"; fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          case "$TAG" in v1.*) echo "latest=true" >> $GITHUB_OUTPUT ;; *) echo "latest=false" >> $GITHUB_OUTPUT ;; esac
+
       - name: Docker meta
         uses: docker/metadata-action@v5
         id: meta
@@ -30,10 +39,10 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=raw,value=beta,enable=${{ github.ref_type == 'branch' }}
-            type=sha,prefix=sha-,format=short,enable=${{ github.ref_type == 'branch' }}
-            type=ref,event=tag
-            type=raw,value=latest,enable=${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v1.') }}
+            type=raw,value=beta
+            type=sha,prefix=sha-,format=short
+            type=raw,value=${{ steps.version.outputs.tag }}
+            type=raw,value=latest,enable=${{ steps.version.outputs.latest == 'true' }}
 
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -45,3 +54,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Sync version tag
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git tag -f "${{ steps.version.outputs.tag }}" HEAD
+          git push origin "${{ steps.version.outputs.tag }}" --force
