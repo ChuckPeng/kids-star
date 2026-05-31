@@ -13,8 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - uses: docker/setup-buildx-action@v3
 
@@ -45,11 +43,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Sync version tag (branch only)
-        if: github.ref_type == 'branch'
-        run: |
-          VER_TAG=$(git tag --sort=-creatordate --list v* | head -1)
-          if [ -z "$VER_TAG" ]; then VER_TAG="v0.1.0-beta"; fi
-          git tag -f "$VER_TAG" HEAD
-          git push origin "$VER_TAG" --force
