@@ -1,12 +1,9 @@
-import { createRouter, createWebHistory } from 'vue-router'
+﻿import { createRouter, createWebHistory } from 'vue-router'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    {
-      path: '/',
-      redirect: '/login',
-    },
+    { path: '/', redirect: '/login' },
     {
       path: '/login',
       name: 'Login',
@@ -18,18 +15,66 @@ const router = createRouter({
       component: () => import('@/views/auth/Register.vue'),
     },
     {
-      path: '/parent/dashboard',
+      path: '/setup',
+      name: 'Setup',
+      component: () => import('@/views/Setup.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/parent',
       name: 'ParentDashboard',
       component: () => import('@/views/parent/Dashboard.vue'),
       meta: { requiresAuth: true, role: 'parent' },
     },
     {
-      path: '/child/my-tasks',
+      path: '/child',
       name: 'ChildMyTasks',
       component: () => import('@/views/child/MyTasks.vue'),
       meta: { requiresAuth: true, role: 'child' },
     },
   ],
+})
+
+router.beforeEach(async (to, _from, next) => {
+  const token = localStorage.getItem('access_token')
+  if (to.meta.requiresAuth && !token) {
+    return next('/login')
+  }
+
+  if (token) {
+    // Dynamic import to avoid circular dependency
+    const { useAuthStore } = await import('@/stores/auth')
+    const auth = useAuthStore()
+    if (!auth.user) {
+      try {
+        await auth.fetchMe()
+      } catch {
+        return next('/login')
+      }
+    }
+
+    // Role check
+    if (to.meta.role && auth.user?.role !== to.meta.role && auth.user?.role !== 'admin') {
+      if (auth.user?.role === 'parent') return next('/parent')
+      if (auth.user?.role === 'child') return next('/child')
+    }
+
+    // Check if user has a family (skip for setup page)
+    if (!to.path.startsWith('/setup') && !to.path.startsWith('/login') && !to.path.startsWith('/register')) {
+      const { useFamilyStore } = await import('@/stores/family')
+      const family = useFamilyStore()
+      if (!family.family) {
+        try {
+          await family.fetchMyFamily()
+        } catch {}
+      }
+      if (!family.family) {
+        return next('/setup')
+      }
+    }
+  }
+
+  next()
 })
 
 export default router
