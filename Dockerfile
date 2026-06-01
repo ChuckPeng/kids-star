@@ -1,4 +1,4 @@
-# ---- Stage 1: Build Frontend ----
+﻿# ---- Stage 1: Build Frontend ----
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
@@ -16,10 +16,10 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 # ---- Stage 3: Runtime ----
 FROM python:3.12-slim
 
-# System deps + nginx + supervisor
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx supervisor libpq5 && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    rm -f /etc/nginx/sites-enabled/default
 
 WORKDIR /app
 
@@ -32,10 +32,15 @@ COPY backend/ .
 COPY --from=frontend-builder /app/frontend/dist /app/static
 
 # Nginx config
-COPY nginx.prod.conf /etc/nginx/sites-available/default
+COPY nginx.prod.conf /etc/nginx/conf.d/default.conf
 
 # Supervisor config
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
+# Startup script: run migrations then start supervisor
+RUN echo '#!/bin/bash' > /start.sh && \
+    echo 'cd /app && alembic upgrade head && exec supervisord -c /etc/supervisor/supervisord.conf' >> /start.sh && \
+    chmod +x /start.sh
+
 EXPOSE 80
-CMD ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]
+CMD ["/start.sh"]
