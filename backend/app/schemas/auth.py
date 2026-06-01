@@ -1,14 +1,15 @@
-from pydantic import BaseModel, EmailStr
+﻿from pydantic import BaseModel
+from typing import Optional
 
 
 class UserRegister(BaseModel):
-    email: EmailStr
+    username: str
     password: str
     name: str
 
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    username: str
     password: str
 
 
@@ -24,10 +25,10 @@ class RefreshRequest(BaseModel):
 
 class UserResponse(BaseModel):
     id: str
-    email: str
+    username: str
     name: str
     role: str
-    avatar_url: str | None = None
+    avatar_url: Optional[str] = None
 
     class Config:
         from_attributes = True

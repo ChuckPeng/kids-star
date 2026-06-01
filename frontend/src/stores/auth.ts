@@ -10,16 +10,16 @@ export const useAuthStore = defineStore('auth', () => {
   const isParent = computed(() => user.value?.role === 'parent' || user.value?.role === 'admin')
   const isChild = computed(() => user.value?.role === 'child')
 
-  async function login(email: string, password: string) {
-    const { data } = await api.post('/auth/login', { email, password })
+  async function login(username: string, password: string) {
+    const { data } = await api.post('/auth/login', { username, password })
     localStorage.setItem('access_token', data.access_token)
     localStorage.setItem('refresh_token', data.refresh_token)
     await fetchMe()
   }
 
-  async function register(email: string, password: string, name: string) {
-    await api.post('/auth/register', { email, password, name })
-    await login(email, password)
+  async function register(username: string, password: string, name: string) {
+    await api.post('/auth/register', { username, password, name })
+    await login(username, password)
   }
 
   async function fetchMe() {

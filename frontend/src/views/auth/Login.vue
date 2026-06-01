@@ -6,8 +6,8 @@
 
       <form @submit.prevent="handleLogin" class="login-form">
         <div class="form-group">
-          <label>邮箱</label>
-          <input v-model="form.email" type="email" placeholder="请输入邮箱" required />
+          <label>用户名</label>
+          <input v-model="form.username" type="text" placeholder="请输入用户名" required />
         </div>
         <div class="form-group">
           <label>密码</label>
@@ -36,16 +36,16 @@ const authStore = useAuthStore()
 const loading = ref(false)
 const error = ref('')
 
-const form = ref({ email: '', password: '' })
+const form = ref({ username: '', password: '' })
 
 async function handleLogin() {
   loading.value = true
   error.value = ''
   try {
-    await authStore.login(form.value.email, form.value.password)
+    await authStore.login(form.value.username, form.value.password)
     router.push(authStore.isParent ? '/parent' : '/child')
   } catch (e: any) {
-    error.value = e.response?.data?.detail || '登录失败，请检查邮箱和密码'
+    error.value = e.response?.data?.detail || '用户名或密码错误'
   } finally {
     loading.value = false
   }
@@ -54,20 +54,12 @@ async function handleLogin() {
 
 <style scoped>
 .login-container {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 20px;
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px;
 }
 .login-card {
-  background: white;
-  border-radius: 16px;
-  padding: 40px;
-  width: 100%;
-  max-width: 400px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  background: white; border-radius: 16px; padding: 40px; width: 100%;
+  max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.15);
 }
 .title { text-align: center; font-size: 28px; color: #333; margin: 0 0 4px; }
 .subtitle { text-align: center; color: #888; margin: 0 0 24px; font-size: 14px; }

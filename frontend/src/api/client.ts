@@ -16,6 +16,12 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
+    const url = error.config?.url || ''
+    // Don't intercept login/register errors
+    if (url === '/auth/login' || url === '/auth/register') {
+      return Promise.reject(error)
+    }
+
     if (error.response?.status === 401) {
       const refreshToken = localStorage.getItem('refresh_token')
       if (refreshToken && error.config && !error.config._retry) {

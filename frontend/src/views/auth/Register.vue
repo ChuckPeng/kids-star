@@ -6,12 +6,12 @@
 
       <form @submit.prevent="handleRegister" class="register-form">
         <div class="form-group">
-          <label>昵称</label>
-          <input v-model="form.name" type="text" placeholder="如何称呼您" required />
+          <label>用户名</label>
+          <input v-model="form.username" type="text" placeholder="登录用的用户名" required />
         </div>
         <div class="form-group">
-          <label>邮箱</label>
-          <input v-model="form.email" type="email" placeholder="请输入邮箱" required />
+          <label>昵称</label>
+          <input v-model="form.name" type="text" placeholder="如何称呼您" required />
         </div>
         <div class="form-group">
           <label>密码</label>
@@ -39,13 +39,13 @@ const router = useRouter()
 const authStore = useAuthStore()
 const loading = ref(false)
 const error = ref('')
-const form = ref({ name: '', email: '', password: '' })
+const form = ref({ username: '', name: '', password: '' })
 
 async function handleRegister() {
   loading.value = true
   error.value = ''
   try {
-    await authStore.register(form.value.email, form.value.password, form.value.name)
+    await authStore.register(form.value.username, form.value.password, form.value.name)
     router.push('/parent')
   } catch (e: any) {
     error.value = e.response?.data?.detail || '注册失败，请稍后再试'
