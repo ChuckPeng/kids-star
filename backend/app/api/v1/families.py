@@ -108,7 +108,7 @@ async def lookup_family_children(
     invite_code: str,
     db: AsyncSession = Depends(get_db),
 ):
-    \""\""Lookup children in a family by invite code (for child login).\""\""
+    """Lookup children in a family by invite code (for child login)."""
     result = await db.execute(
         select(Family).where(Family.invite_code == invite_code.upper())
     )
@@ -137,7 +137,7 @@ async def create_child(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    \""\""Create a child account in the family (parent only).\""\""
+    """Create a child account in the family (parent only)."""
     # Verify parent is in a family
     result = await db.execute(
         select(FamilyMember).where(FamilyMember.user_id == current_user.id)
@@ -192,6 +192,7 @@ async def get_my_family(
     family = result.scalar_one()
 
     return await _get_family_response(family, db)
+
 
 
 
