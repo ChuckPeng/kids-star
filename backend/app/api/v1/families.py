@@ -1,4 +1,4 @@
-﻿import secrets
+﻿import secrets, uuid
 from uuid import UUID
 from typing import Optional
 
@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user, get_db
 from app.models.models import User, Family, FamilyMember
-from app.schemas.family import FamilyCreate, FamilyJoin, FamilyResponse, FamilyMemberResponse
+from app.schemas.family import FamilyCreate, FamilyJoin, FamilyMemberCreate, FamilyResponse, FamilyMemberResponse
 
 router = APIRouter(prefix="/families", tags=["families"])
 
@@ -101,6 +101,81 @@ async def join_family(
     return await _get_family_response(family, db)
 
 
+
+
+@router.get("/lookup/{invite_code}")
+async def lookup_family_children(
+    invite_code: str,
+    db: AsyncSession = Depends(get_db),
+):
+    \""\""Lookup children in a family by invite code (for child login).\""\""
+    result = await db.execute(
+        select(Family).where(Family.invite_code == invite_code.upper())
+    )
+    family = result.scalar_one_or_none()
+    if not family:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid invite code")
+
+    result = await db.execute(
+        select(FamilyMember, User)
+        .join(User, FamilyMember.user_id == User.id)
+        .where(
+            FamilyMember.family_id == family.id,
+            FamilyMember.role == "child",
+            User.is_active == True,
+        )
+    )
+    rows = result.all()
+    return [
+        {"id": str(user.id), "name": user.name, "nickname": member.nickname}
+        for member, user in rows
+    ]
+
+@router.post("/children", response_model=FamilyMemberResponse, status_code=status.HTTP_201_CREATED)
+async def create_child(
+    data: FamilyMemberCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    \""\""Create a child account in the family (parent only).\""\""
+    # Verify parent is in a family
+    result = await db.execute(
+        select(FamilyMember).where(FamilyMember.user_id == current_user.id)
+    )
+    parent_member = result.scalar_one_or_none()
+    if not parent_member or parent_member.role != "parent":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Parent access required")
+
+    # Create child user (no password - simplified login)
+    child_user = User(
+        username=f"child_{uuid.uuid4().hex[:8]}",
+        password_hash="",
+        name=data.nickname or data.name,
+        role="child",
+    )
+    db.add(child_user)
+    await db.flush()
+
+    # Add to family
+    member = FamilyMember(
+        user_id=child_user.id,
+        family_id=parent_member.family_id,
+        role="child",
+        nickname=data.nickname or data.name,
+    )
+    db.add(member)
+    await db.flush()
+    await db.refresh(member)
+
+    return FamilyMemberResponse(
+        id=child_user.id,
+        name=child_user.name,
+        role=member.role,
+        nickname=member.nickname,
+        avatar_url=member.avatar_url,
+        points=member.points,
+    )
+
 @router.get("/me", response_model=Optional[FamilyResponse])
 async def get_my_family(
     current_user: User = Depends(get_current_user),
@@ -117,3 +192,6 @@ async def get_my_family(
     family = result.scalar_one()
 
     return await _get_family_response(family, db)
+
+
+

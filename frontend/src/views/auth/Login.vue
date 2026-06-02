@@ -19,6 +19,9 @@
         <p class="link-text">
           还没有账号？<router-link to="/register">立即注册</router-link>
         </p>
+        <p class="link-text" style="margin-top:4px">
+          <router-link to="/child-login">儿童登录</router-link>
+        </p>
       </form>
 
       <p v-if="error" class="error-msg">{{ error }}</p>
@@ -80,3 +83,4 @@ async function handleLogin() {
 .link-text a { color: #667eea; text-decoration: none; }
 .error-msg { color: #e74c3c; font-size: 13px; text-align: center; margin-top: 12px; }
 </style>
+

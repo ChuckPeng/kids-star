@@ -23,6 +23,10 @@ class TokenResponse(BaseModel):
 class RefreshRequest(BaseModel):
     refresh_token: str
 
+class ChildLogin(BaseModel):
+    invite_code: str
+    child_id: UUID
+
 
 class UserResponse(BaseModel):
     id: UUID
@@ -33,3 +37,4 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+

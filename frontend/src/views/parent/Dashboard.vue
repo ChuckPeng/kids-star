@@ -3,46 +3,76 @@
     <header class="header">
       <h1>{{ family?.name || 'Kids-Star' }}</h1>
       <div class="header-actions">
-        <span class="invite">邀请码: <strong>{{ family?.invite_code }}</strong></span>
         <button class="btn-sm" @click="auth.logout()">退出</button>
       </div>
     </header>
 
-    <!-- Children -->
-    <section v-if="family?.members" class="section">
-      <h3>家庭成员</h3>
-      <div class="member-list">
-        <div v-for="m in children" :key="m.id" class="member-card">
-          <div class="member-name">{{ m.nickname || m.name }}</div>
-          <div class="member-points">⭐ {{ m.points }}</div>
-        </div>
+    <!-- Invite code + children management -->
+    <section class="section">
+      <div class="invite-box">
+        <span>邀请码: <strong>{{ family?.invite_code }}</strong></span>
+        <span class="hint">孩子用此码登录</span>
       </div>
     </section>
 
-    <!-- Create Task -->
+    <!-- Children -->
     <section class="section">
-      <h3>{{ showCreate ? '创建任务' : '任务列表' }}</h3>
-      <button v-if="!showCreate" class="btn primary" @click="showCreate = true">+ 新建任务</button>
-      <div v-else class="create-form">
+      <div class="section-header">
+        <h3>家庭成员</h3>
+        <button class="btn-sm-outline" @click="showAddChild = !showAddChild">
+          {{ showAddChild ? '取消' : '+ 添加孩子' }}
+        </button>
+      </div>
+
+      <!-- Add child form -->
+      <div v-if="showAddChild" class="add-child-form">
+        <input v-model="childForm.nickname" placeholder="孩子昵称（如：小明）" />
+        <button class="btn primary small" @click="doAddChild" :disabled="!childForm.nickname">创建</button>
+        <p v-if="addChildMsg" class="msg">{{ addChildMsg }}</p>
+      </div>
+
+      <div class="member-list">
+        <div v-for="m in children" :key="m.id" class="member-card">
+          <div class="member-avatar">👦</div>
+          <div class="member-name">{{ m.nickname || m.name }}</div>
+          <div class="member-points">⭐ {{ m.points }}</div>
+        </div>
+        <div v-if="children.length === 0" class="empty-hint">还没有添加孩子，点击上方按钮添加</div>
+      </div>
+    </section>
+
+    <!-- Tasks section -->
+    <section class="section">
+      <div class="section-header">
+        <h3>{{ showCreate ? '创建任务' : '任务列表' }}</h3>
+        <button v-if="!showCreate" class="btn primary small" @click="showCreate = true">+ 新建任务</button>
+        <button v-else class="btn-sm-outline" @click="showCreate = false">取消</button>
+      </div>
+
+      <div v-if="showCreate" class="create-form">
         <input v-model="form.title" placeholder="任务标题" />
-        <select v-model="form.difficulty">
-          <option value="required">必修任务</option>
-          <option value="challenge">挑战任务</option>
-        </select>
-        <input v-model.number="form.base_points" type="number" placeholder="星星数" />
-        <div class="member-select">
+        <textarea v-model="form.description" placeholder="任务描述（可选）" rows="2"></textarea>
+        <div class="form-row">
+          <select v-model="form.difficulty">
+            <option value="required">必修任务</option>
+            <option value="challenge">挑战任务</option>
+          </select>
+          <input v-model.number="form.base_points" type="number" placeholder="星星数" min="1" max="100" />
+        </div>
+        <div v-if="form.difficulty === 'required' && children.length > 0" class="member-select">
+          <span class="label">分配给:</span>
           <label v-for="c in children" :key="c.id">
             <input type="checkbox" :value="c.id" v-model="form.assigned_to" /> {{ c.nickname || c.name }}
           </label>
         </div>
+        <p v-if="form.difficulty === 'challenge'" class="hint">挑战任务将发布到挑战广场，孩子自主领取</p>
         <div class="btn-row">
-          <button class="btn primary" @click="doCreateTask">创建</button>
-          <button class="btn secondary" @click="showCreate = false">取消</button>
+          <button class="btn primary" @click="doCreateTask" :disabled="!form.title">创建任务</button>
         </div>
       </div>
     </section>
 
-    <!-- Tasks -->
+    <!-- Task cards -->
     <section class="section">
       <div v-if="loading" class="loading">加载中...</div>
       <div v-for="t in tasks" :key="t.id" class="task-card">
@@ -51,23 +81,32 @@
           <strong>{{ t.title }}</strong>
           <span class="task-points">⭐{{ t.base_points }}</span>
         </div>
-        <div class="task-status">{{ t.status }}</div>
-        <button v-if="t.status === 'active'" class="btn-sm" @click="openReview(t)">查看提交</button>
+        <p v-if="t.description" class="task-desc">{{ t.description }}</p>
+        <div class="task-actions">
+          <span class="task-status">{{ statusLabel(t.status) }}</span>
+          <button class="btn secondary small" @click="openReview(t)">查看提交</button>
+        </div>
       </div>
+      <p v-if="!loading && tasks.length === 0" class="empty">暂无任务</p>
     </section>
 
     <!-- Review Modal -->
     <div v-if="reviewTask" class="modal">
       <div class="modal-content">
         <h3>{{ reviewTask.title }} - 提交记录</h3>
-        <div v-if="reviewSubmissions.length === 0">暂无提交</div>
+        <div v-if="subLoading" class="loading">加载中...</div>
+        <div v-else-if="reviewSubmissions.length === 0" class="empty">暂无提交记录</div>
         <div v-for="s in reviewSubmissions" :key="s.id" class="submission-card">
-          <p><strong>状态:</strong> {{ s.status }}</p>
-          <p v-if="s.child_note">备注: {{ s.child_note }}</p>
-          <div v-if="s.status === 'pending'" class="btn-row">
-            <button class="btn primary" @click="doReview(s, 'approved')">✓ 通过</button>
-            <button class="btn danger" @click="doReview(s, 'rejected')">✕ 拒绝</button>
+          <div class="sub-header">
+            <span class="sub-status" :class="s.status">{{ s.status === 'pending' ? '待审核' : s.status === 'approved' ? '已通过' : '已拒绝' }}</span>
+            <span class="sub-time">{{ formatTime(s.submitted_at) }}</span>
           </div>
+          <p v-if="s.child_note">📝 {{ s.child_note }}</p>
+          <div v-if="s.status === 'pending'" class="btn-row">
+            <button class="btn success small" @click="doReview(s, 'approved')">✓ 通过</button>
+            <button class="btn danger small" @click="doReview(s, 'rejected')">✕ 拒绝</button>
+          </div>
+          <p v-if="s.parent_note" class="review-note">💬 {{ s.parent_note }}</p>
         </div>
         <button class="btn secondary" @click="reviewTask = null; reviewSubmissions = []">关闭</button>
       </div>
@@ -79,6 +118,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
+import api from '@/api/client'
 
 const familyStore = useFamilyStore()
 const auth = useAuthStore()
@@ -87,12 +127,25 @@ const family = computed(() => familyStore.family)
 const tasks = ref<any[]>([])
 const loading = ref(false)
 const showCreate = ref(false)
+const showAddChild = ref(false)
 const reviewTask = ref<any>(null)
 const reviewSubmissions = ref<any[]>([])
+const subLoading = ref(false)
+const addChildMsg = ref('')
+
+const childForm = ref({ nickname: '' })
+const form = ref({ title: '', description: '', difficulty: 'required', base_points: 5, assigned_to: [] as string[] })
 
 const children = computed(() => family.value?.members?.filter((m: any) => m.role === 'child') || [])
 
-const form = ref({ title: '', difficulty: 'required', base_points: 5, assigned_to: [] as string[] })
+function statusLabel(s: string) {
+  return s === 'active' ? '进行中' : s === 'completed' ? '已完成' : s === 'paused' ? '已暂停' : s
+}
+
+function formatTime(t: string) {
+  if (!t) return ''
+  return new Date(t).toLocaleString('zh-CN')
+}
 
 onMounted(async () => {
   loading.value = true
@@ -101,9 +154,22 @@ onMounted(async () => {
   loading.value = false
 })
 
+async function doAddChild() {
+  addChildMsg.value = ''
+  try {
+    await api.post('/families/children', { name: childForm.value.nickname, nickname: childForm.value.nickname })
+    childForm.value.nickname = ''
+    showAddChild.value = false
+    addChildMsg.value = '孩子添加成功！'
+    await familyStore.fetchMyFamily()
+  } catch (e: any) {
+    addChildMsg.value = e.response?.data?.detail || '添加失败'
+  }
+}
+
 async function doCreateTask() {
   await familyStore.createTask(form.value)
-  form.value = { title: '', difficulty: 'required', base_points: 5, assigned_to: [] }
+  form.value = { title: '', description: '', difficulty: 'required', base_points: 5, assigned_to: [] }
   showCreate.value = false
   await familyStore.fetchTasks()
   tasks.value = familyStore.tasks
@@ -111,12 +177,18 @@ async function doCreateTask() {
 
 async function openReview(task: any) {
   reviewTask.value = task
-  reviewSubmissions.value = await familyStore.fetchSubmissions(task.id)
+  subLoading.value = true
+  try {
+    reviewSubmissions.value = await familyStore.fetchSubmissions(task.id)
+  } catch {}
+  subLoading.value = false
 }
 
 async function doReview(sub: any, status: string) {
   await familyStore.reviewTask(sub.task_id, status)
-  openReview(reviewTask.value)
+  await openReview(reviewTask.value)
+  await familyStore.fetchTasks()
+  tasks.value = familyStore.tasks
 }
 </script>
 
@@ -124,22 +196,38 @@ async function doReview(sub: any, status: string) {
 .dashboard { min-height: 100vh; background: #f0f2f5; padding-bottom: 40px; }
 .header { padding: 16px 20px; background: #667eea; color: white; display: flex; justify-content: space-between; align-items: center; }
 .header h1 { font-size: 18px; margin: 0; }
-.header-actions { display: flex; gap: 12px; align-items: center; font-size: 13px; }
-.invite strong { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 4px; }
+.header-actions { display: flex; gap: 12px; align-items: center; }
 .btn-sm { padding: 4px 12px; border: 1px solid rgba(255,255,255,0.5); border-radius: 6px; background: transparent; color: white; cursor: pointer; font-size: 12px; }
+.btn-sm-outline { padding: 6px 14px; border: 1px solid #d9d9d9; border-radius: 6px; background: white; color: #667eea; cursor: pointer; font-size: 13px; font-weight: 500; }
 .section { max-width: 600px; margin: 16px auto; padding: 0 16px; }
-.section h3 { font-size: 16px; margin-bottom: 12px; }
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.section-header h3 { font-size: 16px; margin: 0; }
+.invite-box { background: white; border-radius: 10px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
+.invite-box strong { background: #e8f0fe; padding: 2px 10px; border-radius: 4px; color: #667eea; }
+.hint { font-size: 12px; color: #999; }
 .member-list { display: flex; gap: 10px; flex-wrap: wrap; }
 .member-card { background: white; border-radius: 10px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); text-align: center; min-width: 80px; }
-.member-name { font-weight: 600; font-size: 14px; }
-.member-points { color: #f39c12; font-size: 18px; font-weight: 700; margin-top: 4px; }
-.create-form { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; flex-direction: column; gap: 10px; }
-.create-form input, .create-form select { padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 14px; }
-.member-select { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; }
+.member-avatar { font-size: 28px; }
+.member-name { font-weight: 600; font-size: 14px; margin-top: 4px; }
+.member-points { color: #f39c12; font-size: 16px; font-weight: 700; margin-top: 2px; }
+.empty-hint { color: #999; font-size: 13px; padding: 12px; }
+.add-child-form { background: white; border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.add-child-form input { flex: 1; min-width: 120px; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 14px; }
+.msg { font-size: 12px; color: #27ae60; width: 100%; margin: 4px 0 0; }
+.create-form { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+.create-form input, .create-form select, .create-form textarea { padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 14px; font-family: inherit; }
+.form-row { display: flex; gap: 8px; }
+.form-row select { flex: 1; }
+.form-row input { width: 90px; }
+.member-select { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; align-items: center; }
+.member-select .label { color: #888; }
 .member-select label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .btn { padding: 8px 16px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.btn.small { padding: 6px 14px; font-size: 13px; }
 .btn.primary { background: #667eea; color: white; }
+.btn.primary:disabled { opacity: 0.5; cursor: default; }
 .btn.secondary { background: #f0f2f5; color: #333; }
+.btn.success { background: #27ae60; color: white; }
 .btn.danger { background: #e74c3c; color: white; }
 .btn-row { display: flex; gap: 8px; }
 .task-card { background: white; border-radius: 10px; padding: 14px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
@@ -148,9 +236,19 @@ async function doReview(sub: any, status: string) {
 .task-badge.required { background: #e8f0fe; color: #667eea; }
 .task-badge.challenge { background: #fef3e2; color: #f39c12; }
 .task-points { margin-left: auto; color: #f39c12; font-weight: 600; }
-.task-status { font-size: 12px; color: #999; margin-top: 4px; }
-.loading { text-align: center; color: #999; padding: 20px; }
+.task-desc { color: #666; font-size: 13px; margin: 6px 0; }
+.task-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.task-status { font-size: 12px; color: #999; }
+.loading, .empty { text-align: center; color: #999; padding: 20px; font-size: 14px; }
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.modal-content { background: white; border-radius: 12px; padding: 24px; max-width: 440px; width: 90%; max-height: 80vh; overflow-y: auto; }
+.modal-content { background: white; border-radius: 12px; padding: 24px; max-width: 480px; width: 90%; max-height: 80vh; overflow-y: auto; }
+.modal-content h3 { margin: 0 0 16px; font-size: 17px; }
 .submission-card { border: 1px solid #eee; border-radius: 8px; padding: 12px; margin: 8px 0; }
+.sub-header { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px; }
+.sub-status { font-weight: 600; }
+.sub-status.pending { color: #f39c12; }
+.sub-status.approved { color: #27ae60; }
+.sub-status.rejected { color: #e74c3c; }
+.sub-time { color: #999; }
+.review-note { font-size: 13px; color: #666; margin-top: 4px; }
 </style>

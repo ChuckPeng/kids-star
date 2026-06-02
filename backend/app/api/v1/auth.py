@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user, get_db
 from app.core.security import (
@@ -12,10 +13,11 @@ from app.core.security import (
     create_refresh_token,
     decode_token,
 )
-from app.models.models import User
+from app.models.models import User, Family, FamilyMember
 from app.schemas.auth import (
     UserRegister,
     UserLogin,
+    ChildLogin,
     TokenResponse,
     RefreshRequest,
     UserResponse,
@@ -50,6 +52,42 @@ async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
+
+    access_token = create_access_token(str(user.id))
+    refresh_token = create_refresh_token(str(user.id))
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/login-child", response_model=TokenResponse)
+async def login_child(data: ChildLogin, db: AsyncSession = Depends(get_db)):
+    """Child simplified login: invite code + select profile."""
+    # Find family by invite code
+    result = await db.execute(
+        select(Family).where(Family.invite_code == data.invite_code.upper())
+    )
+    family = result.scalar_one_or_none()
+    if not family:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid invite code")
+
+    # Verify child belongs to this family
+    result = await db.execute(
+        select(FamilyMember).where(
+            FamilyMember.family_id == family.id,
+            FamilyMember.user_id == data.child_id,
+            FamilyMember.role == "child",
+        )
+    )
+    member = result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a child in this family")
+
+    # Get the user
+    result = await db.execute(
+        select(User).where(User.id == data.child_id, User.is_active == True)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Child account not found")
 
     access_token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))

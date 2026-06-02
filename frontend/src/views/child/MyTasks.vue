@@ -29,6 +29,12 @@
       <p v-if="!loading && tasks.length === 0" class="empty">暂无任务，去提醒家长分配吧！</p>
     </section>
   </div>
+
+    <nav class="bottom-nav">
+      <a class="active">📋 我的任务</a>
+      <a @click="$router.push('/challenge-board')">🏆 挑战广场</a>
+      <a @click="$router.push('/my-challenges')">🔥 我的挑战</a>
+    </nav>
 </template>
 
 <script setup lang="ts">
@@ -87,4 +93,14 @@ async function doSubmit(task: any) {
 .btn:disabled { opacity: 0.4; cursor: default; }
 .msg { font-size: 12px; color: #27ae60; margin-left: 8px; }
 .loading, .empty { text-align: center; color: #999; padding: 20px; }
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; background: white;
+  display: flex; border-top: 1px solid #eee; z-index: 10;
+}
+.bottom-nav a {
+  flex: 1; text-align: center; padding: 12px 8px; font-size: 13px;
+  color: #888; cursor: pointer; text-decoration: none;
+}
+.bottom-nav a.active { color: #667eea; font-weight: 600; }
 </style>
+

@@ -13,6 +13,11 @@ const router = createRouter({
       path: '/register',
       name: 'Register',
       component: () => import('@/views/auth/Register.vue'),
+    {
+      path: '/child-login',
+      name: 'ChildLogin',
+      component: () => import('@/views/auth/ChildLogin.vue'),
+    },
     },
     {
       path: '/setup',
@@ -30,7 +35,19 @@ const router = createRouter({
       path: '/child',
       name: 'ChildMyTasks',
       component: () => import('@/views/child/MyTasks.vue'),
+      meta: { requiresAuth: true, role: 'child' },    {
+      path: '/challenge-board',
+      name: 'ChallengeBoard',
+      component: () => import('@/views/child/ChallengeBoard.vue'),
       meta: { requiresAuth: true, role: 'child' },
+    },
+    {
+      path: '/my-challenges',
+      name: 'MyChallenges',
+      component: () => import('@/views/child/MyChallenges.vue'),
+      meta: { requiresAuth: true, role: 'child' },
+    },
+
     },
   ],
 })
@@ -60,7 +77,7 @@ router.beforeEach(async (to, _from, next) => {
     }
 
     // Check if user has a family (skip for setup page)
-    if (!to.path.startsWith('/setup') && !to.path.startsWith('/login') && !to.path.startsWith('/register')) {
+    if (!to.path.startsWith('/setup') && !to.path.startsWith('/login') && !to.path.startsWith('/register') && !to.path.startsWith('/child-login')) {
       const { useFamilyStore } = await import('@/stores/family')
       const family = useFamilyStore()
       if (!family.family) {
@@ -78,3 +95,6 @@ router.beforeEach(async (to, _from, next) => {
 })
 
 export default router
+
+
+

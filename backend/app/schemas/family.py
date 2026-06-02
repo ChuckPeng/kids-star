@@ -11,6 +11,11 @@ class FamilyJoin(BaseModel):
     invite_code: str
 
 
+class FamilyMemberCreate(BaseModel):
+    name: str
+    nickname: Optional[str] = None
+
+
 class FamilyMemberResponse(BaseModel):
     id: UUID
     name: str
@@ -31,3 +36,4 @@ class FamilyResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
