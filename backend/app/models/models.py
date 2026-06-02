@@ -1,8 +1,8 @@
-import uuid
+﻿import uuid
 from datetime import datetime, timezone
 from typing import Optional, List
 
-from sqlalchemy import String, Integer, Boolean, Text, Float, Date, Time, ForeignKey, UniqueConstraint, Index
+from sqlalchemy import String, Integer, Boolean, Text, Float, Date, Time, ForeignKey, UniqueConstraint, Index, DateTime
 from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -25,8 +25,8 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(20), nullable=False, default="parent")  # parent | child | admin
     avatar_url: Mapped[Optional[str]] = mapped_column(String(500))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     family_memberships: Mapped[list["FamilyMember"]] = relationship(back_populates="user")
     created_tasks: Mapped[list["Task"]] = relationship(foreign_keys="Task.created_by", back_populates="creator")
@@ -42,8 +42,8 @@ class Family(Base):
     invite_code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
     max_daily_penalty: Mapped[int] = mapped_column(Integer, default=20)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     members: Mapped[list["FamilyMember"]] = relationship(back_populates="family")
     tasks: Mapped[list["Task"]] = relationship(back_populates="family")
@@ -63,7 +63,7 @@ class FamilyMember(Base):
     nickname: Mapped[Optional[str]] = mapped_column(String(50))
     avatar_url: Mapped[Optional[str]] = mapped_column(String(500))
     points: Mapped[int] = mapped_column(Integer, default=0)
-    joined_at: Mapped[datetime] = mapped_column(default=utcnow)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     user: Mapped["User"] = relationship(back_populates="family_memberships")
     family: Mapped["Family"] = relationship(back_populates="members")
@@ -93,8 +93,8 @@ class Task(Base):
     claim_deadline_hours: Mapped[int] = mapped_column(Integer, default=48)
     status: Mapped[str] = mapped_column(String(20), default="active")  # active | paused | completed | cancelled
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     family: Mapped["Family"] = relationship(back_populates="tasks")
     creator: Mapped["User"] = relationship(foreign_keys=[created_by], back_populates="created_tasks")
@@ -110,8 +110,8 @@ class TaskClaim(Base):
     task_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=False)
     child_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="claimed")  # claimed | in_progress | completed | abandoned
-    claimed_at: Mapped[datetime] = mapped_column(default=utcnow)
-    completed_at: Mapped[Optional[datetime]]
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     task: Mapped["Task"] = relationship(back_populates="claims")
 
@@ -127,9 +127,9 @@ class Submission(Base):
     child_note: Mapped[Optional[str]] = mapped_column(Text)
     parent_note: Mapped[Optional[str]] = mapped_column(Text)
     points_earned: Mapped[int] = mapped_column(Integer, default=0)
-    submitted_at: Mapped[datetime] = mapped_column(default=utcnow)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     reviewed_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    reviewed_at: Mapped[Optional[datetime]]
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     task: Mapped["Task"] = relationship(back_populates="submissions")
     child: Mapped["User"] = relationship(foreign_keys=[child_id], back_populates="submissions")
@@ -145,7 +145,7 @@ class PointsRecord(Base):
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
     type: Mapped[str] = mapped_column(String(20), nullable=False)  # task_complete | bonus | auto_penalty | manual_penalty | redemption | reward_application | manual
     reason: Mapped[Optional[str]] = mapped_column(String(300))
-    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class Reward(Base):
@@ -160,7 +160,7 @@ class Reward(Base):
     stock: Mapped[int] = mapped_column(Integer, default=-1)  # -1 = unlimited
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     family: Mapped["Family"] = relationship(back_populates="rewards")
     redemptions: Mapped[list["Redemption"]] = relationship(back_populates="reward")
@@ -176,9 +176,9 @@ class Redemption(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | approved | fulfilled | rejected
     parent_note: Mapped[Optional[str]] = mapped_column(Text)
     reviewed_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    redeemed_at: Mapped[datetime] = mapped_column(default=utcnow)
-    reviewed_at: Mapped[Optional[datetime]]
-    fulfilled_at: Mapped[Optional[datetime]]
+    redeemed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    fulfilled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     reward: Mapped["Reward"] = relationship(back_populates="redemptions")
 
@@ -204,7 +204,7 @@ class ChildBadge(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     child_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     badge_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("badges.id"), nullable=False)
-    earned_at: Mapped[datetime] = mapped_column(default=utcnow)
+    earned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class FamilyPenaltyRule(Base):
@@ -217,8 +217,8 @@ class FamilyPenaltyRule(Base):
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     trigger_config: Mapped[dict] = mapped_column(JSONB, nullable=False)
     penalty_action: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     family: Mapped["Family"] = relationship(back_populates="penalty_rules")
 
@@ -237,8 +237,8 @@ class RewardApplication(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | approved | rejected
     parent_note: Mapped[Optional[str]] = mapped_column(Text)
     reviewed_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    submitted_at: Mapped[datetime] = mapped_column(default=utcnow)
-    reviewed_at: Mapped[Optional[datetime]]
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
 
 class TaskProposal(Base):
@@ -258,8 +258,8 @@ class TaskProposal(Base):
     parent_note: Mapped[Optional[str]] = mapped_column(Text)
     created_task_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id"))
     reviewed_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    submitted_at: Mapped[datetime] = mapped_column(default=utcnow)
-    reviewed_at: Mapped[Optional[datetime]]
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
 
 class Notification(Base):
@@ -275,4 +275,4 @@ class Notification(Base):
     body: Mapped[Optional[str]] = mapped_column(Text)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
     related_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
-    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
