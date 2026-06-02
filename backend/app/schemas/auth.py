@@ -1,4 +1,5 @@
 ﻿from pydantic import BaseModel
+from uuid import UUID
 from typing import Optional
 
 
@@ -24,7 +25,7 @@ class RefreshRequest(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: str
+    id: UUID
     username: str
     name: str
     role: str
