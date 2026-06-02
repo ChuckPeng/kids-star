@@ -30,7 +30,7 @@ COPY backend/ .
 
 COPY --from=frontend-builder /app/frontend/dist /app/static
 
-# Nginx (heredoc preserves $variables as-is)
+# Nginx
 RUN cat > /etc/nginx/conf.d/default.conf <<'NGX'
 server {
     listen 80 default_server;
@@ -104,7 +104,24 @@ stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
 SUP
 
-RUN printf '#!/bin/bash\ncd /app && alembic upgrade head && exec supervisord -c /etc/supervisor/conf.d/supervisord.conf\n' > /start.sh && chmod +x /start.sh
+# Startup: reset old migration tracking, then upgrade
+RUN cat > /start.sh <<'START'
+#!/bin/bash
+cd /app
+python3 <<'PYEOF'
+import asyncio, asyncpg, os
+async def main():
+    try:
+        conn = await asyncpg.connect(os.environ['DATABASE_URL'])
+        await conn.execute("DROP TABLE IF EXISTS alembic_version")
+        await conn.close()
+    except: pass
+asyncio.run(main())
+PYEOF
+alembic upgrade head
+exec supervisord -c /etc/supervisor/conf.d/supervisord.conf
+START
+RUN chmod +x /start.sh
 
 EXPOSE 80
 CMD ["/start.sh"]
