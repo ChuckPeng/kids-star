@@ -1,4 +1,4 @@
-"""Celery app configuration for Kids-Star."""
+﻿"""Celery app configuration for Kids-Star."""
 from celery import Celery
 from app.core.config import get_settings
 
@@ -8,6 +8,12 @@ celery_app = Celery(
     "kids_star",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
+    include=[
+        "app.tasks.reminders",
+        "app.tasks.penalties",
+        "app.tasks.streaks",
+        "app.tasks.notifications",
+    ],
 )
 
 celery_app.conf.update(
@@ -19,11 +25,11 @@ celery_app.conf.update(
     beat_schedule={
         "check-overdue-tasks": {
             "task": "app.tasks.reminders.check_overdue_tasks",
-            "schedule": 3600.0,  # every hour
+            "schedule": 3600.0,
         },
         "evaluate-penalty-rules": {
             "task": "app.tasks.penalties.evaluate_penalty_rules",
-            "schedule": 86400.0,  # daily at midnight
+            "schedule": 86400.0,
         },
         "generate-repeat-tasks": {
             "task": "app.tasks.reminders.generate_repeat_tasks",
