@@ -13,11 +13,11 @@ const router = createRouter({
       path: '/register',
       name: 'Register',
       component: () => import('@/views/auth/Register.vue'),
+    },
     {
       path: '/child-login',
       name: 'ChildLogin',
       component: () => import('@/views/auth/ChildLogin.vue'),
-    },
     },
     {
       path: '/setup',
@@ -35,7 +35,9 @@ const router = createRouter({
       path: '/child',
       name: 'ChildMyTasks',
       component: () => import('@/views/child/MyTasks.vue'),
-      meta: { requiresAuth: true, role: 'child' },    {
+      meta: { requiresAuth: true, role: 'child' },
+    },
+    {
       path: '/challenge-board',
       name: 'ChallengeBoard',
       component: () => import('@/views/child/ChallengeBoard.vue'),
@@ -47,8 +49,6 @@ const router = createRouter({
       component: () => import('@/views/child/MyChallenges.vue'),
       meta: { requiresAuth: true, role: 'child' },
     },
-
-    },
   ],
 })
 
@@ -59,7 +59,6 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   if (token) {
-    // Dynamic import to avoid circular dependency
     const { useAuthStore } = await import('@/stores/auth')
     const auth = useAuthStore()
     if (!auth.user) {
@@ -70,22 +69,18 @@ router.beforeEach(async (to, _from, next) => {
       }
     }
 
-    // Role check
     if (to.meta.role && auth.user?.role !== to.meta.role && auth.user?.role !== 'admin') {
       if (auth.user?.role === 'parent') return next('/parent')
       if (auth.user?.role === 'child') return next('/child')
     }
 
-    // Check if user has a family (skip for setup page)
     if (!to.path.startsWith('/setup') && !to.path.startsWith('/login') && !to.path.startsWith('/register') && !to.path.startsWith('/child-login')) {
       const { useFamilyStore } = await import('@/stores/family')
-      const family = useFamilyStore()
-      if (!family.family) {
-        try {
-          await family.fetchMyFamily()
-        } catch {}
+      const f = useFamilyStore()
+      if (!f.family) {
+        try { await f.fetchMyFamily() } catch {}
       }
-      if (!family.family) {
+      if (!f.family) {
         return next('/setup')
       }
     }
@@ -95,6 +90,3 @@ router.beforeEach(async (to, _from, next) => {
 })
 
 export default router
-
-
-
