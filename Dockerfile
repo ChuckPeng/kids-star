@@ -35,14 +35,11 @@ RUN cat > /etc/nginx/conf.d/default.conf <<'NGX'
 server {
     listen 80 default_server;
     server_name localhost;
-
     root /app/static;
     index index.html;
-
     location / {
         try_files $uri $uri/ /index.html;
     }
-
     location /api/ {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
@@ -50,7 +47,6 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
-
     location /assets/ {
         expires 1y;
         add_header Cache-Control "public, immutable";
@@ -63,7 +59,6 @@ RUN cat > /etc/supervisor/conf.d/supervisord.conf <<'SUP'
 [supervisord]
 nodaemon=true
 user=root
-
 [program:nginx]
 command=nginx -g "daemon off;"
 autostart=true
@@ -72,7 +67,6 @@ stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
-
 [program:uvicorn]
 command=uvicorn main:app --host 127.0.0.1 --port 8000
 directory=/app
@@ -82,7 +76,6 @@ stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
-
 [program:celery-worker]
 command=celery -A app.tasks.celery_app worker --loglevel=info
 directory=/app
@@ -92,7 +85,6 @@ stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
-
 [program:celery-beat]
 command=celery -A app.tasks.celery_app beat --loglevel=info
 directory=/app
@@ -104,21 +96,36 @@ stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
 SUP
 
-# Startup: reset old migration tracking, then upgrade
+# Startup: reset tracking, migrate, fallback to full recreate
 RUN cat > /start.sh <<'START'
 #!/bin/bash
 cd /app
+# Fix asyncpg URL format and drop stale tracking
 python3 <<'PYEOF'
 import asyncio, asyncpg, os
 async def main():
-    try:
-        conn = await asyncpg.connect(os.environ['DATABASE_URL'])
-        await conn.execute("DROP TABLE IF EXISTS alembic_version")
-        await conn.close()
-    except: pass
+    url = os.environ['DATABASE_URL'].replace('+asyncpg', '')
+    conn = await asyncpg.connect(url)
+    await conn.execute("DROP TABLE IF EXISTS alembic_version")
+    await conn.close()
 asyncio.run(main())
 PYEOF
-alembic upgrade head
+# Try migration; if tables exist from old schema, drop and retry
+alembic upgrade head 2>&1 || {
+    echo "Stale tables detected, recreating..."
+    python3 <<'PYEOF2'
+import asyncio, asyncpg, os
+async def main():
+    url = os.environ['DATABASE_URL'].replace('+asyncpg', '')
+    conn = await asyncpg.connect(url)
+    rows = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname='public'")
+    for r in rows:
+        await conn.execute(f'DROP TABLE IF EXISTS "{r[0]}" CASCADE')
+    await conn.close()
+asyncio.run(main())
+PYEOF2
+    alembic upgrade head
+}
 exec supervisord -c /etc/supervisor/conf.d/supervisord.conf
 START
 RUN chmod +x /start.sh
