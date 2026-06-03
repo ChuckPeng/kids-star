@@ -96,36 +96,55 @@ stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
 SUP
 
-# Startup: reset tracking, migrate, fallback to full recreate
+# Startup: safe migration that NEVER destroys data
 RUN cat > /start.sh <<'START'
 #!/bin/bash
+set -e
 cd /app
-# Fix asyncpg URL format and drop stale tracking
+
+echo "=== Checking database state ==="
 python3 <<'PYEOF'
 import asyncio, asyncpg, os
+
 async def main():
     url = os.environ['DATABASE_URL'].replace('+asyncpg', '')
     conn = await asyncpg.connect(url)
-    await conn.execute("DROP TABLE IF EXISTS alembic_version")
-    await conn.close()
+    try:
+        # Check if any app tables exist
+        rows = await conn.fetch(
+            "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename IN ('users','families','tasks','submissions')"
+        )
+        existing = [r['tablename'] for r in rows]
+        print(f"Existing app tables: {existing if existing else 'none'}")
+
+        # Check alembic version tracking
+        try:
+            ver = await conn.fetchval("SELECT version_num FROM alembic_version")
+            print(f"Current alembic version: {ver}")
+        except:
+            print("No alembic_version table")
+            ver = None
+
+        if existing and ver is None:
+            # Tables exist but no migration tracking -> stamp current head
+            print("Tables exist without migration record, stamping head version...")
+            import subprocess, sys
+            subprocess.run([sys.executable, '-m', 'alembic', 'stamp', 'head'], check=True)
+            print("Stamped head version, data preserved.")
+        elif not existing:
+            print("Fresh database, running migration...")
+            import subprocess, sys
+            subprocess.run([sys.executable, '-m', 'alembic', 'upgrade', 'head'], check=True)
+            print("Migration complete.")
+        else:
+            print("Database up to date, data preserved.")
+    finally:
+        await conn.close()
+
 asyncio.run(main())
 PYEOF
-# Try migration; if tables exist from old schema, drop and retry
-alembic upgrade head 2>&1 || {
-    echo "Stale tables detected, recreating..."
-    python3 <<'PYEOF2'
-import asyncio, asyncpg, os
-async def main():
-    url = os.environ['DATABASE_URL'].replace('+asyncpg', '')
-    conn = await asyncpg.connect(url)
-    rows = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname='public'")
-    for r in rows:
-        await conn.execute(f'DROP TABLE IF EXISTS "{r[0]}" CASCADE')
-    await conn.close()
-asyncio.run(main())
-PYEOF2
-    alembic upgrade head
-}
+
+echo "=== Starting services ==="
 exec supervisord -c /etc/supervisor/conf.d/supervisord.conf
 START
 RUN chmod +x /start.sh
