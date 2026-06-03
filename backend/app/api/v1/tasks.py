@@ -1,9 +1,9 @@
 ﻿from uuid import UUID
 from typing import Optional, List
-from datetime import date, time
+from datetime import date, time, timezone, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -166,16 +166,23 @@ async def submit_task(
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
-    # Check already submitted
+    # Check already submitted (pending or approved today)
+    today = date.today()
     existing = await db.execute(
         select(Submission).where(
             Submission.task_id == task_id,
             Submission.child_id == current_user.id,
-            Submission.status == "pending",
+            or_(
+                Submission.status == "pending",
+                and_(
+                    Submission.status == "approved",
+                    Submission.submitted_at >= today,
+                ),
+            ),
         )
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already submitted, awaiting review")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already submitted, awaiting review or already approved today")
 
     submission = Submission(
         task_id=task_id,
@@ -226,14 +233,15 @@ async def review_submission(
     if not submission:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No pending submission")
 
-    from datetime import timezone, datetime
     submission.status = data.status
     submission.parent_note = data.parent_note
     submission.reviewed_by = current_user.id
     submission.reviewed_at = datetime.now(timezone.utc)
 
     if data.status == "approved":
-        submission.points_earned = task.base_points
+        # For required (non-challenge) tasks, set challenge_multiplier to 1.0
+        multiplier = task.challenge_multiplier if task.difficulty == "challenge" else 1.0
+        submission.points_earned = int(task.base_points * multiplier)
         # Award points to child
         result = await db.execute(
             select(FamilyMember).where(
@@ -243,7 +251,7 @@ async def review_submission(
         )
         child_member = result.scalar_one_or_none()
         if child_member:
-            child_member.points += task.base_points
+            child_member.points += submission.points_earned
 
     await db.flush()
     await db.refresh(submission)
@@ -280,6 +288,32 @@ async def get_submissions(
         select(Submission)
         .where(Submission.task_id == task_id)
         .order_by(Submission.submitted_at.desc())
+    )
+    submissions = result.scalars().all()
+    return [
+        SubmissionResponse(
+            id=s.id, task_id=s.task_id, child_id=s.child_id,
+            status=s.status, child_note=s.child_note, parent_note=s.parent_note,
+            points_earned=s.points_earned, submitted_at=s.submitted_at,
+            reviewed_at=s.reviewed_at,
+        )
+        for s in submissions
+    ]
+
+
+# ── Get my submissions status (child) ──
+@router.get("/my-submissions", response_model=List[SubmissionResponse])
+async def get_my_submissions(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    member = await _require_member(current_user, db)
+
+    result = await db.execute(
+        select(Submission)
+        .where(Submission.child_id == current_user.id)
+        .order_by(Submission.submitted_at.desc())
+        .limit(50)
     )
     submissions = result.scalars().all()
     return [

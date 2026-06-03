@@ -17,64 +17,107 @@
           <span class="task-points">⭐{{ t.base_points }}</span>
         </div>
         <p v-if="t.description" class="task-desc">{{ t.description }}</p>
-        <button
-          class="btn primary"
-          @click="doSubmit(t)"
-          :disabled="submittedTasks.has(t.id)"
-        >
-          {{ submittedTasks.has(t.id) ? '已提交' : '提交完成' }}
-        </button>
-        <span v-if="msg" class="msg">{{ msg }}</span>
+        <div class="task-actions">
+          <button
+            v-if="!getSubStatus(t.id)"
+            class="btn primary"
+            @click="doSubmit(t)"
+          >
+            提交完成
+          </button>
+          <span v-else-if="getSubStatus(t.id) === 'pending'" class="status-tag pending">⏳ 等待审核</span>
+          <span v-else-if="getSubStatus(t.id) === 'approved'" class="status-tag approved">✅ 已通过 (+{{ getSubPoints(t.id) }}⭐)</span>
+          <span v-else-if="getSubStatus(t.id) === 'rejected'" class="status-tag rejected">
+            ❌ 已拒绝
+            <span v-if="getSubNote(t.id)" class="reject-note">{{ getSubNote(t.id) }}</span>
+            <button class="btn retry-btn" @click="doResubmit(t)">重新提交</button>
+          </span>
+        </div>
+        <p v-if="taskMsgs.get(t.id)" class="msg">{{ taskMsgs.get(t.id) }}</p>
       </div>
       <p v-if="!loading && tasks.length === 0" class="empty">暂无任务，去提醒家长分配吧！</p>
     </section>
-  </div>
 
     <nav class="bottom-nav">
       <a class="active">📋 我的任务</a>
       <a @click="$router.push('/challenge-board')">🏆 挑战广场</a>
       <a @click="$router.push('/my-challenges')">🔥 我的挑战</a>
     </nav>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
+import api from '@/api/client'
 
 const familyStore = useFamilyStore()
 const auth = useAuthStore()
 
 const tasks = ref<any[]>([])
 const loading = ref(false)
-const msg = ref('')
-const submittedTasks = ref(new Set<string>())
+const taskMsgs = ref(new Map<string, string>())
+const mySubmissions = ref<Map<string, any>>(new Map())
 
 const myPoints = computed(() => {
   const member = familyStore.family?.members?.find((m: any) => m.id === auth.user?.id)
   return member?.points || 0
 })
 
+function getSubStatus(taskId: string): string | null {
+  return mySubmissions.value.get(taskId)?.status || null
+}
+
+function getSubPoints(taskId: string): number {
+  return mySubmissions.value.get(taskId)?.points_earned || 0
+}
+
+function getSubNote(taskId: string): string {
+  return mySubmissions.value.get(taskId)?.parent_note || ''
+}
+
 onMounted(async () => {
   loading.value = true
   await familyStore.fetchTasks()
   tasks.value = familyStore.tasks
+  await fetchMySubmissions()
   loading.value = false
 })
 
-async function doSubmit(task: any) {
+async function fetchMySubmissions() {
   try {
-    await familyStore.submitTask(task.id)
-    submittedTasks.value.add(task.id)
-    msg.value = '已提交，等待家长审核'
+    const { data } = await api.get('/tasks/my-submissions')
+    const map = new Map<string, any>()
+    for (const s of data) {
+      const existing = map.get(s.task_id)
+      if (!existing || new Date(s.submitted_at) > new Date(existing.submitted_at)) {
+        map.set(s.task_id, s)
+      }
+    }
+    mySubmissions.value = map
+  } catch {}
+}
+
+async function doSubmit(task: any) {
+  taskMsgs.value.set(task.id, '')
+  try {
+    const res = await familyStore.submitTask(task.id)
+    mySubmissions.value.set(task.id, { status: 'pending', points_earned: 0, parent_note: '' })
+    taskMsgs.value.set(task.id, '已提交，等待家长审核')
   } catch (e: any) {
-    msg.value = e.response?.data?.detail || '提交失败'
+    taskMsgs.value.set(task.id, e.response?.data?.detail || '提交失败')
   }
+}
+
+async function doResubmit(task: any) {
+  mySubmissions.value.delete(task.id)
+  taskMsgs.value.set(task.id, '')
 }
 </script>
 
 <style scoped>
-.my-tasks { min-height: 100vh; background: #f0f2f5; padding-bottom: 40px; }
+.my-tasks { min-height: 100vh; background: #f0f2f5; padding-bottom: 60px; }
 .header { padding: 16px 20px; background: #f39c12; color: white; display: flex; justify-content: space-between; align-items: center; }
 .header h1 { font-size: 18px; margin: 0; }
 .header-actions { display: flex; gap: 12px; align-items: center; font-size: 14px; }
@@ -88,10 +131,17 @@ async function doSubmit(task: any) {
 .task-badge.challenge { background: #fef3e2; color: #f39c12; }
 .task-points { margin-left: auto; color: #f39c12; font-weight: 600; }
 .task-desc { color: #666; font-size: 13px; margin: 8px 0; }
+.task-actions { margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .btn { padding: 8px 16px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
 .btn.primary { background: #f39c12; color: white; }
 .btn:disabled { opacity: 0.4; cursor: default; }
-.msg { font-size: 12px; color: #27ae60; margin-left: 8px; }
+.retry-btn { padding: 4px 10px; font-size: 12px; background: #667eea; color: white; border-radius: 6px; }
+.status-tag { font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 6px; }
+.status-tag.pending { background: #fef3e2; color: #f39c12; }
+.status-tag.approved { background: #e8f8e8; color: #27ae60; }
+.status-tag.rejected { background: #fde8e8; color: #e74c3c; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.reject-note { font-size: 12px; color: #999; font-weight: 400; }
+.msg { font-size: 12px; color: #27ae60; margin-top: 6px; display: block; }
 .loading, .empty { text-align: center; color: #999; padding: 20px; }
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0; background: white;
@@ -103,4 +153,3 @@ async function doSubmit(task: any) {
 }
 .bottom-nav a.active { color: #667eea; font-weight: 600; }
 </style>
-

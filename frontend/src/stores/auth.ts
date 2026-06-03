@@ -1,5 +1,6 @@
 ﻿import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '@/api/client'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -34,6 +35,7 @@ export const useAuthStore = defineStore('auth', () => {
   function logout() {
     localStorage.clear()
     user.value = null
+    window.location.href = '/login'
   }
 
   return { user, loading, isLoggedIn, isParent, isChild, login, register, fetchMe, logout }

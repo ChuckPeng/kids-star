@@ -91,7 +91,7 @@
     </section>
 
     <!-- Review Modal -->
-    <div v-if="reviewTask" class="modal">
+    <div v-if="reviewTask" class="modal" @click.self="closeReview">
       <div class="modal-content">
         <h3>{{ reviewTask.title }} - 提交记录</h3>
         <div v-if="subLoading" class="loading">加载中...</div>
@@ -102,13 +102,23 @@
             <span class="sub-time">{{ formatTime(s.submitted_at) }}</span>
           </div>
           <p v-if="s.child_note">📝 {{ s.child_note }}</p>
-          <div v-if="s.status === 'pending'" class="btn-row">
-            <button class="btn success small" @click="doReview(s, 'approved')">✓ 通过</button>
-            <button class="btn danger small" @click="doReview(s, 'rejected')">✕ 拒绝</button>
+          <div v-if="s.status === 'pending'" class="review-actions">
+            <button class="btn success small" @click="doApprove(s)">✓ 通过</button>
+            <button class="btn danger small" @click="startReject(s)">✕ 拒绝</button>
           </div>
-          <p v-if="s.parent_note" class="review-note">💬 {{ s.parent_note }}</p>
+          <!-- Rejection reason input -->
+          <div v-if="rejecting?.id === s.id" class="reject-form">
+            <textarea v-model="rejectNote" placeholder="请输入拒绝原因（可选）" rows="2"></textarea>
+            <div class="btn-row">
+              <button class="btn danger small" @click="doReject(s)">确认拒绝</button>
+              <button class="btn secondary small" @click="cancelReject()">取消</button>
+            </div>
+          </div>
+          <p v-if="s.parent_note" class="review-note">💬 家长评语: {{ s.parent_note }}</p>
         </div>
-        <button class="btn secondary" @click="reviewTask = null; reviewSubmissions = []">关闭</button>
+        <!-- Review feedback message -->
+        <p v-if="reviewMsg" class="review-feedback" :class="reviewMsgType">{{ reviewMsg }}</p>
+        <button class="btn secondary" @click="closeReview">关闭</button>
       </div>
     </div>
   </div>
@@ -132,6 +142,11 @@ const reviewTask = ref<any>(null)
 const reviewSubmissions = ref<any[]>([])
 const subLoading = ref(false)
 const addChildMsg = ref('')
+
+const rejecting = ref<any>(null)
+const rejectNote = ref('')
+const reviewMsg = ref('')
+const reviewMsgType = ref('success')
 
 const childForm = ref({ nickname: '' })
 const form = ref({ title: '', description: '', difficulty: 'required', base_points: 5, assigned_to: [] as string[] })
@@ -177,6 +192,9 @@ async function doCreateTask() {
 
 async function openReview(task: any) {
   reviewTask.value = task
+  reviewMsg.value = ''
+  rejecting.value = null
+  rejectNote.value = ''
   subLoading.value = true
   try {
     reviewSubmissions.value = await familyStore.fetchSubmissions(task.id)
@@ -184,8 +202,53 @@ async function openReview(task: any) {
   subLoading.value = false
 }
 
-async function doReview(sub: any, status: string) {
-  await familyStore.reviewTask(sub.task_id, status)
+function closeReview() {
+  reviewTask.value = null
+  reviewSubmissions.value = []
+  reviewMsg.value = ''
+  rejecting.value = null
+  rejectNote.value = ''
+}
+
+async function doApprove(sub: any) {
+  reviewMsg.value = ''
+  try {
+    await familyStore.reviewTask(sub.task_id, 'approved')
+    reviewMsg.value = '✅ 已通过，星星已发放'
+    reviewMsgType.value = 'success'
+    await refreshReviewData()
+  } catch (e: any) {
+    reviewMsg.value = '❌ ' + (e.response?.data?.detail || '操作失败')
+    reviewMsgType.value = 'error'
+  }
+}
+
+function startReject(sub: any) {
+  rejecting.value = sub
+  rejectNote.value = ''
+}
+
+function cancelReject() {
+  rejecting.value = null
+  rejectNote.value = ''
+}
+
+async function doReject(sub: any) {
+  reviewMsg.value = ''
+  try {
+    await familyStore.reviewTask(sub.task_id, 'rejected', rejectNote.value)
+    reviewMsg.value = '❌ 已拒绝'
+    reviewMsgType.value = 'error'
+    rejecting.value = null
+    rejectNote.value = ''
+    await refreshReviewData()
+  } catch (e: any) {
+    reviewMsg.value = '❌ ' + (e.response?.data?.detail || '操作失败')
+    reviewMsgType.value = 'error'
+  }
+}
+
+async function refreshReviewData() {
   await openReview(reviewTask.value)
   await familyStore.fetchTasks()
   tasks.value = familyStore.tasks
@@ -250,5 +313,11 @@ async function doReview(sub: any, status: string) {
 .sub-status.approved { color: #27ae60; }
 .sub-status.rejected { color: #e74c3c; }
 .sub-time { color: #999; }
-.review-note { font-size: 13px; color: #666; margin-top: 4px; }
+.review-actions { display: flex; gap: 8px; margin-top: 8px; }
+.review-note { font-size: 13px; color: #666; margin-top: 4px; padding: 6px 8px; background: #f8f9fa; border-radius: 6px; }
+.review-feedback { font-size: 14px; font-weight: 600; padding: 8px 12px; border-radius: 8px; margin: 8px 0; }
+.review-feedback.success { background: #e8f8e8; color: #27ae60; }
+.review-feedback.error { background: #fde8e8; color: #e74c3c; }
+.reject-form { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.reject-form textarea { padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 13px; font-family: inherit; resize: vertical; }
 </style>

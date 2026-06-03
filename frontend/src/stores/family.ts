@@ -38,7 +38,7 @@ export const useFamilyStore = defineStore('family', () => {
   }
 
   async function reviewTask(taskId: string, status: string, note?: string) {
-    const { data } = await api.post(`/tasks/${taskId}/review`, { status, parent_note: note })
+    const { data } = await api.post(`/tasks/${taskId}/review`, { status, parent_note: note || '' })
     return data
   }
 
