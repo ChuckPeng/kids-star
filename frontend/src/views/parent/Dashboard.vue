@@ -7,7 +7,7 @@
       </div>
     </header>
 
-    <!-- Invite code + children management -->
+    <!-- Invite code -->
     <section class="section">
       <div class="invite-box">
         <span>邀请码: <strong>{{ family?.invite_code }}</strong></span>
@@ -23,14 +23,11 @@
           {{ showAddChild ? '取消' : '+ 添加孩子' }}
         </button>
       </div>
-
-      <!-- Add child form -->
       <div v-if="showAddChild" class="add-child-form">
         <input v-model="childForm.nickname" placeholder="孩子昵称（如：小明）" />
         <button class="btn primary small" @click="doAddChild" :disabled="!childForm.nickname">创建</button>
         <p v-if="addChildMsg" class="msg">{{ addChildMsg }}</p>
       </div>
-
       <div class="member-list">
         <div v-for="m in children" :key="m.id" class="member-card">
           <div class="member-avatar">👦</div>
@@ -41,14 +38,13 @@
       </div>
     </section>
 
-    <!-- Tasks section -->
+    <!-- Create task -->
     <section class="section">
       <div class="section-header">
-        <h3>{{ showCreate ? '创建任务' : '任务列表' }}</h3>
+        <h3>{{ showCreate ? '创建任务' : '任务管理' }}</h3>
         <button v-if="!showCreate" class="btn primary small" @click="showCreate = true">+ 新建任务</button>
         <button v-else class="btn-sm-outline" @click="showCreate = false">取消</button>
       </div>
-
       <div v-if="showCreate" class="create-form">
         <input v-model="form.title" placeholder="任务标题" />
         <textarea v-model="form.description" placeholder="任务描述（可选）" rows="2"></textarea>
@@ -72,32 +68,71 @@
       </div>
     </section>
 
-    <!-- Task cards -->
+    <!-- ========== 必修任务 ========== -->
     <section class="section">
+      <div class="section-header">
+        <h3>📋 必修任务</h3>
+        <span class="count-badge">{{ requiredTasks.length }}</span>
+      </div>
       <div v-if="loading" class="loading">加载中...</div>
-      <div v-for="t in tasks" :key="t.id" class="task-card">
+      <div v-for="t in requiredTasks" :key="t.id" class="task-card required-card">
         <div class="task-header">
-          <span class="task-badge" :class="t.difficulty">{{ t.difficulty === 'required' ? '必修' : '挑战' }}</span>
+          <span class="task-badge required">必修</span>
           <strong>{{ t.title }}</strong>
           <span class="task-points">⭐{{ t.base_points }}</span>
         </div>
         <p v-if="t.description" class="task-desc">{{ t.description }}</p>
+        <div class="assigned-children">
+          <span class="label">分配给：</span>
+          <span v-for="cid in t.assigned_to" :key="cid" class="child-chip">{{ getChildName(cid) }}</span>
+          <span v-if="!t.assigned_to || t.assigned_to.length === 0" class="no-assign">未指定</span>
+        </div>
         <div class="task-actions">
           <span class="task-status">{{ statusLabel(t.status) }}</span>
           <button class="btn secondary small" @click="openReview(t)">查看提交</button>
         </div>
       </div>
-      <p v-if="!loading && tasks.length === 0" class="empty">暂无任务</p>
+      <p v-if="!loading && requiredTasks.length === 0" class="empty">暂无必修任务</p>
+    </section>
+
+    <!-- ========== 挑战任务 ========== -->
+    <section class="section">
+      <div class="section-header">
+        <h3>🏆 挑战任务</h3>
+        <span class="count-badge challenge-count">{{ challengeTasks.length }}</span>
+      </div>
+      <div v-for="t in challengeTasks" :key="t.id" class="task-card challenge-card">
+        <div class="task-header">
+          <span class="task-badge challenge">挑战</span>
+          <strong>{{ t.title }}</strong>
+          <span class="task-points">⭐{{ t.base_points }} ×{{ getMultiplier(t) }} = {{ getTotalPoints(t) }}</span>
+        </div>
+        <p v-if="t.description" class="task-desc">{{ t.description }}</p>
+        <div class="challenge-meta">
+          <span class="claim-count">👥 {{ getClaimCount(t.id) }} 人已领取</span>
+        </div>
+        <div class="task-actions">
+          <span class="task-status">{{ statusLabel(t.status) }}</span>
+          <button class="btn secondary small" @click="openReview(t)">查看提交</button>
+        </div>
+      </div>
+      <p v-if="!loading && challengeTasks.length === 0" class="empty">暂无挑战任务，发布一个到挑战广场吧！</p>
     </section>
 
     <!-- Review Modal -->
     <div v-if="reviewTask" class="modal" @click.self="closeReview">
       <div class="modal-content">
-        <h3>{{ reviewTask.title }} - 提交记录</h3>
+        <h3>
+          <span :class="reviewTask.difficulty === 'challenge' ? 'badge-challenge' : 'badge-required'">
+            {{ reviewTask.difficulty === 'challenge' ? '挑战' : '必修' }}
+          </span>
+          {{ reviewTask.title }} - 提交记录
+        </h3>
         <div v-if="subLoading" class="loading">加载中...</div>
         <div v-else-if="reviewSubmissions.length === 0" class="empty">暂无提交记录</div>
         <div v-for="s in reviewSubmissions" :key="s.id" class="submission-card">
           <div class="sub-header">
+            <span class="sub-child">👤 {{ s.child_name || '未知' }}</span>
             <span class="sub-status" :class="s.status">{{ s.status === 'pending' ? '待审核' : s.status === 'approved' ? '已通过' : '已拒绝' }}</span>
             <span class="sub-time">{{ formatTime(s.submitted_at) }}</span>
           </div>
@@ -106,7 +141,6 @@
             <button class="btn success small" @click="doApprove(s)">✓ 通过</button>
             <button class="btn danger small" @click="startReject(s)">✕ 拒绝</button>
           </div>
-          <!-- Rejection reason input -->
           <div v-if="rejecting?.id === s.id" class="reject-form">
             <textarea v-model="rejectNote" placeholder="请输入拒绝原因（可选）" rows="2"></textarea>
             <div class="btn-row">
@@ -116,7 +150,6 @@
           </div>
           <p v-if="s.parent_note" class="review-note">💬 家长评语: {{ s.parent_note }}</p>
         </div>
-        <!-- Review feedback message -->
         <p v-if="reviewMsg" class="review-feedback" :class="reviewMsgType">{{ reviewMsg }}</p>
         <button class="btn secondary" @click="closeReview">关闭</button>
       </div>
@@ -142,6 +175,7 @@ const reviewTask = ref<any>(null)
 const reviewSubmissions = ref<any[]>([])
 const subLoading = ref(false)
 const addChildMsg = ref('')
+const claimCounts = ref<Record<string, number>>({})
 
 const rejecting = ref<any>(null)
 const rejectNote = ref('')
@@ -152,6 +186,26 @@ const childForm = ref({ nickname: '' })
 const form = ref({ title: '', description: '', difficulty: 'required', base_points: 5, assigned_to: [] as string[] })
 
 const children = computed(() => family.value?.members?.filter((m: any) => m.role === 'child') || [])
+
+const requiredTasks = computed(() => tasks.value.filter((t: any) => t.difficulty === 'required'))
+const challengeTasks = computed(() => tasks.value.filter((t: any) => t.difficulty === 'challenge'))
+
+function getChildName(cid: string): string {
+  const child = children.value.find((c: any) => c.id === cid || c.user_id === cid)
+  return child?.nickname || child?.name || '未知'
+}
+
+function getMultiplier(task: any): number {
+  return task.challenge_multiplier || 1.5
+}
+
+function getTotalPoints(task: any): number {
+  return Math.floor(task.base_points * getMultiplier(task))
+}
+
+function getClaimCount(taskId: string): number {
+  return claimCounts.value[taskId] || 0
+}
 
 function statusLabel(s: string) {
   return s === 'active' ? '进行中' : s === 'completed' ? '已完成' : s === 'paused' ? '已暂停' : s
@@ -166,8 +220,16 @@ onMounted(async () => {
   loading.value = true
   await familyStore.fetchTasks()
   tasks.value = familyStore.tasks
+  await fetchClaimCounts()
   loading.value = false
 })
+
+async function fetchClaimCounts() {
+  try {
+    const { data } = await api.get('/challenges/claims/counts')
+    claimCounts.value = data
+  } catch {}
+}
 
 async function doAddChild() {
   addChildMsg.value = ''
@@ -265,6 +327,8 @@ async function refreshReviewData() {
 .section { max-width: 600px; margin: 16px auto; padding: 0 16px; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .section-header h3 { font-size: 16px; margin: 0; }
+.count-badge { background: #e8f0fe; color: #667eea; padding: 2px 10px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+.count-badge.challenge-count { background: #fef3e2; color: #f39c12; }
 .invite-box { background: white; border-radius: 10px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
 .invite-box strong { background: #e8f0fe; padding: 2px 10px; border-radius: 4px; color: #667eea; }
 .hint { font-size: 12px; color: #999; }
@@ -293,21 +357,36 @@ async function refreshReviewData() {
 .btn.success { background: #27ae60; color: white; }
 .btn.danger { background: #e74c3c; color: white; }
 .btn-row { display: flex; gap: 8px; }
+
+/* Task cards */
 .task-card { background: white; border-radius: 10px; padding: 14px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.required-card { border-left: 3px solid #667eea; }
+.challenge-card { border-left: 3px solid #f39c12; }
 .task-header { display: flex; align-items: center; gap: 8px; }
 .task-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
 .task-badge.required { background: #e8f0fe; color: #667eea; }
 .task-badge.challenge { background: #fef3e2; color: #f39c12; }
-.task-points { margin-left: auto; color: #f39c12; font-weight: 600; }
+.task-points { margin-left: auto; color: #f39c12; font-weight: 600; font-size: 13px; }
 .task-desc { color: #666; font-size: 13px; margin: 6px 0; }
+.assigned-children { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin: 6px 0; font-size: 12px; }
+.assigned-children .label { color: #999; }
+.child-chip { background: #e8f0fe; color: #667eea; padding: 1px 8px; border-radius: 8px; font-weight: 500; }
+.no-assign { color: #ccc; font-style: italic; }
+.challenge-meta { margin: 6px 0; }
+.claim-count { font-size: 12px; color: #f39c12; font-weight: 500; }
 .task-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
 .task-status { font-size: 12px; color: #999; }
 .loading, .empty { text-align: center; color: #999; padding: 20px; font-size: 14px; }
+
+/* Modal */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .modal-content { background: white; border-radius: 12px; padding: 24px; max-width: 480px; width: 90%; max-height: 80vh; overflow-y: auto; }
-.modal-content h3 { margin: 0 0 16px; font-size: 17px; }
+.modal-content h3 { margin: 0 0 16px; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+.badge-required { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #e8f0fe; color: #667eea; }
+.badge-challenge { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #fef3e2; color: #f39c12; }
 .submission-card { border: 1px solid #eee; border-radius: 8px; padding: 12px; margin: 8px 0; }
-.sub-header { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px; }
+.sub-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px; gap: 8px; flex-wrap: wrap; }
+.sub-child { font-weight: 600; color: #333; }
 .sub-status { font-weight: 600; }
 .sub-status.pending { color: #f39c12; }
 .sub-status.approved { color: #27ae60; }

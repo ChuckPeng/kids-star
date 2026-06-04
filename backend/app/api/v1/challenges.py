@@ -154,3 +154,23 @@ async def my_challenges(
         }
         for claim, task in rows
     ]
+@router.get("/claims/counts")
+async def get_claim_counts(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get claim counts for all challenge tasks in the family."""
+    member = await _get_family_member(current_user.id, db)
+
+    result = await db.execute(
+        select(TaskClaim.task_id)
+        .join(Task, TaskClaim.task_id == Task.id)
+        .where(Task.family_id == member.family_id, Task.difficulty == "challenge")
+    )
+    counts: dict = {}
+    for row in result:
+        tid = str(row[0])
+        counts[tid] = counts.get(tid, 0) + 1
+    return counts
+
+

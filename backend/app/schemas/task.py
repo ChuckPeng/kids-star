@@ -60,6 +60,7 @@ class SubmissionResponse(BaseModel):
     id: UUID
     task_id: UUID
     child_id: UUID
+    child_name: Optional[str] = None
     status: str
     child_note: Optional[str] = None
     parent_note: Optional[str] = None

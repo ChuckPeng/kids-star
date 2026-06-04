@@ -33,6 +33,17 @@ async def _require_member(current_user: User, db: AsyncSession) -> FamilyMember:
     return await _get_family_member(current_user.id, db)
 
 
+async def _get_child_name(child_id: UUID, db: AsyncSession) -> str:
+    result = await db.execute(select(User.name).where(User.id == child_id))
+    name = result.scalar_one_or_none()
+    # Also check family_member nickname
+    result2 = await db.execute(
+        select(FamilyMember.nickname).where(FamilyMember.user_id == child_id)
+    )
+    nickname = result2.scalar_one_or_none()
+    return nickname or name or "未知"
+
+
 def _task_to_response(task: Task) -> TaskResponse:
     return TaskResponse(
         id=task.id,
@@ -196,6 +207,7 @@ async def submit_task(
         id=submission.id,
         task_id=submission.task_id,
         child_id=submission.child_id,
+        child_name=current_user.name,
         status=submission.status,
         child_note=submission.child_note,
         parent_note=submission.parent_note,
@@ -233,16 +245,16 @@ async def review_submission(
     if not submission:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No pending submission")
 
+    child_name = await _get_child_name(submission.child_id, db)
+
     submission.status = data.status
     submission.parent_note = data.parent_note
     submission.reviewed_by = current_user.id
     submission.reviewed_at = datetime.now(timezone.utc)
 
     if data.status == "approved":
-        # For required (non-challenge) tasks, set challenge_multiplier to 1.0
         multiplier = task.challenge_multiplier if task.difficulty == "challenge" else 1.0
         submission.points_earned = int(task.base_points * multiplier)
-        # Award points to child
         result = await db.execute(
             select(FamilyMember).where(
                 FamilyMember.family_id == member.family_id,
@@ -259,6 +271,7 @@ async def review_submission(
         id=submission.id,
         task_id=submission.task_id,
         child_id=submission.child_id,
+        child_name=child_name,
         status=submission.status,
         child_note=submission.child_note,
         parent_note=submission.parent_note,
@@ -284,20 +297,27 @@ async def get_submissions(
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
+    # Join with users and family_members to get child names
     result = await db.execute(
-        select(Submission)
+        select(Submission, User.name, FamilyMember.nickname)
+        .join(User, Submission.child_id == User.id, isouter=True)
+        .join(FamilyMember, and_(
+            FamilyMember.user_id == Submission.child_id,
+            FamilyMember.family_id == member.family_id,
+        ), isouter=True)
         .where(Submission.task_id == task_id)
         .order_by(Submission.submitted_at.desc())
     )
-    submissions = result.scalars().all()
+    rows = result.all()
     return [
         SubmissionResponse(
             id=s.id, task_id=s.task_id, child_id=s.child_id,
+            child_name=nickname or name or "未知",
             status=s.status, child_note=s.child_note, parent_note=s.parent_note,
             points_earned=s.points_earned, submitted_at=s.submitted_at,
             reviewed_at=s.reviewed_at,
         )
-        for s in submissions
+        for s, name, nickname in rows
     ]
 
 
@@ -319,6 +339,7 @@ async def get_my_submissions(
     return [
         SubmissionResponse(
             id=s.id, task_id=s.task_id, child_id=s.child_id,
+            child_name=current_user.name,
             status=s.status, child_note=s.child_note, parent_note=s.parent_note,
             points_earned=s.points_earned, submitted_at=s.submitted_at,
             reviewed_at=s.reviewed_at,
