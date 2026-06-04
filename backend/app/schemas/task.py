@@ -20,6 +20,7 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    difficulty: Optional[str] = None
     base_points: Optional[int] = None
     assigned_to: Optional[List[UUID]] = None
     status: Optional[str] = None
@@ -70,3 +71,4 @@ class SubmissionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+

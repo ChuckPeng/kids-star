@@ -146,6 +146,8 @@ async def update_task(
         task.title = data.title
     if data.description is not None:
         task.description = data.description
+    if data.difficulty is not None:
+        task.difficulty = data.difficulty
     if data.base_points is not None:
         task.base_points = data.base_points
     if data.assigned_to is not None:
@@ -370,5 +372,6 @@ async def get_my_submissions(
         )
         for s in submissions
     ]
+
 
 
