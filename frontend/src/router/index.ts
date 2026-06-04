@@ -45,9 +45,7 @@ const router = createRouter({
     },
     {
       path: '/my-challenges',
-      name: 'MyChallenges',
-      component: () => import('@/views/child/MyChallenges.vue'),
-      meta: { requiresAuth: true, role: 'child' },
+      redirect: '/child',
     },
   ],
 })
@@ -90,3 +88,4 @@ router.beforeEach(async (to, _from, next) => {
 })
 
 export default router
+

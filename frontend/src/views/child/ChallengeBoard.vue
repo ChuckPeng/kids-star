@@ -38,7 +38,6 @@
     <nav class="bottom-nav">
       <a @click="$router.push('/child')">📋 我的任务</a>
       <a class="active">🏆 挑战广场</a>
-      <a @click="$router.push('/my-challenges')">🔥 我的挑战</a>
     </nav>
   </div>
 </template>
@@ -128,3 +127,4 @@ function goBack() {
 }
 .bottom-nav a.active { color: #f39c12; font-weight: 600; }
 </style>
+
