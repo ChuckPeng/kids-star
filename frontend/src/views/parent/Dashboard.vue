@@ -89,7 +89,11 @@
         </div>
         <div class="task-actions">
           <span class="task-status">{{ statusLabel(t.status) }}</span>
-          <button class="btn secondary small" @click="openReview(t)">查看提交</button>
+          <div class="action-btns">
+            <button class="btn secondary small" @click="openReview(t)">查看提交</button>
+            <button class="btn outline small" @click="openEdit(t)">编辑</button>
+            <button class="btn danger small" @click="confirmDelete(t)">删除</button>
+          </div>
         </div>
       </div>
       <p v-if="!loading && requiredTasks.length === 0" class="empty">暂无必修任务</p>
@@ -113,7 +117,11 @@
         </div>
         <div class="task-actions">
           <span class="task-status">{{ statusLabel(t.status) }}</span>
-          <button class="btn secondary small" @click="openReview(t)">查看提交</button>
+          <div class="action-btns">
+            <button class="btn secondary small" @click="openReview(t)">查看提交</button>
+            <button class="btn outline small" @click="openEdit(t)">编辑</button>
+            <button class="btn danger small" @click="confirmDelete(t)">删除</button>
+          </div>
         </div>
       </div>
       <p v-if="!loading && challengeTasks.length === 0" class="empty">暂无挑战任务，发布一个到挑战广场吧！</p>
@@ -154,6 +162,58 @@
         <button class="btn secondary" @click="closeReview">关闭</button>
       </div>
     </div>
+
+    <!-- Edit Task Modal -->
+    <div v-if="editingTask" class="modal" @click.self="cancelEdit">
+      <div class="modal-content">
+        <h3>编辑任务</h3>
+        <div class="edit-form">
+          <label>标题</label>
+          <input v-model="editForm.title" placeholder="任务标题" />
+          <label>描述</label>
+          <textarea v-model="editForm.description" placeholder="任务描述（可选）" rows="2"></textarea>
+          <div class="form-row">
+            <label>星星数</label>
+            <input v-model.number="editForm.base_points" type="number" min="1" max="100" />
+            <label>类型</label>
+            <select v-model="editForm.difficulty">
+              <option value="required">必修</option>
+              <option value="challenge">挑战</option>
+            </select>
+          </div>
+          <div v-if="editForm.difficulty === 'required' && children.length > 0" class="member-select">
+            <span class="label">分配给:</span>
+            <label v-for="c in children" :key="c.id">
+              <input type="checkbox" :value="c.id" v-model="editForm.assigned_to" /> {{ c.nickname || c.name }}
+            </label>
+          </div>
+          <label>状态</label>
+          <select v-model="editForm.status">
+            <option value="active">进行中</option>
+            <option value="paused">暂停</option>
+            <option value="completed">已完成</option>
+          </select>
+          <div class="btn-row">
+            <button class="btn primary" @click="doEdit" :disabled="!editForm.title">保存</button>
+            <button class="btn secondary" @click="cancelEdit">取消</button>
+          </div>
+          <p v-if="editMsg" class="msg" :class="editMsgType">{{ editMsg }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Confirm Dialog -->
+    <div v-if="deletingTask" class="modal" @click.self="cancelDelete">
+      <div class="modal-content modal-sm">
+        <h3>确认删除</h3>
+        <p>确定要删除任务「<strong>{{ deletingTask.title }}</strong>」吗？此操作不可撤销，所有相关提交记录也将被删除。</p>
+        <div class="btn-row">
+          <button class="btn danger" @click="doDelete">确认删除</button>
+          <button class="btn secondary" @click="cancelDelete">取消</button>
+        </div>
+        <p v-if="deleteMsg" class="msg error">{{ deleteMsg }}</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -181,6 +241,12 @@ const rejecting = ref<any>(null)
 const rejectNote = ref('')
 const reviewMsg = ref('')
 const reviewMsgType = ref('success')
+const editingTask = ref<any>(null)
+const editForm = ref({ title: '', description: '', difficulty: 'required', base_points: 5, assigned_to: [] as string[], status: 'active' })
+const editMsg = ref('')
+const editMsgType = ref('success')
+const deletingTask = ref<any>(null)
+const deleteMsg = ref('')
 
 const childForm = ref({ nickname: '' })
 const form = ref({ title: '', description: '', difficulty: 'required', base_points: 5, assigned_to: [] as string[] })
@@ -310,6 +376,63 @@ async function doReject(sub: any) {
   }
 }
 
+// ── Edit Task ──
+function openEdit(task: any) {
+  editingTask.value = task
+  editForm.value = {
+    title: task.title,
+    description: task.description || "",
+    difficulty: task.difficulty,
+    base_points: task.base_points,
+    assigned_to: [...(task.assigned_to || [])],
+    status: task.status,
+  }
+  editMsg.value = ""
+}
+
+function cancelEdit() {
+  editingTask.value = null
+  editMsg.value = ""
+}
+
+async function doEdit() {
+  editMsg.value = ""
+  try {
+    await api.patch("/tasks/" + editingTask.value.id, editForm.value)
+    editMsg.value = "已保存"
+    editMsgType.value = "success"
+    editingTask.value = null
+    await familyStore.fetchTasks()
+    tasks.value = familyStore.tasks
+  } catch (e: any) {
+    editMsg.value = e.response?.data?.detail || "保存失败"
+    editMsgType.value = "error"
+  }
+}
+
+// ── Delete Task ──
+function confirmDelete(task: any) {
+  deletingTask.value = task
+  deleteMsg.value = ""
+}
+
+function cancelDelete() {
+  deletingTask.value = null
+  deleteMsg.value = ""
+}
+
+async function doDelete() {
+  deleteMsg.value = ""
+  try {
+    await api.delete("/tasks/" + deletingTask.value.id)
+    deletingTask.value = null
+    await familyStore.fetchTasks()
+    tasks.value = familyStore.tasks
+  } catch (e: any) {
+    deleteMsg.value = e.response?.data?.detail || "删除失败"
+  }
+}
+
 async function refreshReviewData() {
   await openReview(reviewTask.value)
   await familyStore.fetchTasks()
@@ -399,4 +522,18 @@ async function refreshReviewData() {
 .review-feedback.error { background: #fde8e8; color: #e74c3c; }
 .reject-form { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
 .reject-form textarea { padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 13px; font-family: inherit; resize: vertical; }
-</style>
+
+/* Edit & Delete */
+.action-btns { display: flex; gap: 6px; }
+.btn.outline { background: white; border: 1px solid #667eea; color: #667eea; }
+.btn.danger.small { background: #e74c3c; color: white; font-size: 12px; padding: 5px 10px; }
+.modal-sm { max-width: 380px; }
+.modal-sm p { font-size: 14px; color: #666; line-height: 1.6; margin: 0 0 16px; }
+.edit-form { display: flex; flex-direction: column; gap: 8px; }
+.edit-form label { font-size: 13px; font-weight: 600; color: #555; }
+.edit-form input, .edit-form select, .edit-form textarea { padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 14px; font-family: inherit; }
+.msg.error { color: #e74c3c; }`n</style>
+
+
+
+

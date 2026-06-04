@@ -281,6 +281,30 @@ async def review_submission(
     )
 
 
+
+# ── Delete Task (parent) ──
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_task(
+    task_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    member = await _require_parent(current_user, db)
+
+    result = await db.execute(
+        select(Task).where(Task.id == task_id, Task.family_id == member.family_id)
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    # Delete related submissions first
+    subs_result = await db.execute(select(Submission).where(Submission.task_id == task_id))
+    for s in subs_result.scalars().all():
+        await db.delete(s)
+
+    await db.delete(task)
+    await db.flush()
 # ── Get submissions for a task ──
 @router.get("/{task_id}/submissions", response_model=List[SubmissionResponse])
 async def get_submissions(
@@ -346,3 +370,5 @@ async def get_my_submissions(
         )
         for s in submissions
     ]
+
+
