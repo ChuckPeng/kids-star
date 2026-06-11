@@ -70,8 +70,10 @@
     </section>
 
     <nav class="bottom-nav">
-      <a class="active">📋 我的任务</a>
-      <a @click="$router.push('/challenge-board')">🏆 挑战广场</a>
+      <a class="active">📋 任务</a>
+      <a @click="$router.push('/challenge-board')">🏆 挑战</a>
+      <a @click="$router.push('/shop')">🛒 商店</a>
+      <a @click="$router.push('/requests')">📝 申请</a>
     </nav>
   </div>
 </template>
@@ -208,3 +210,4 @@ async function doResubmit(task: any) {
 }
 .bottom-nav a.active { color: #667eea; font-weight: 600; }
 </style>
+

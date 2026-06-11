@@ -36,8 +36,10 @@
     </section>
 
     <nav class="bottom-nav">
-      <a @click="$router.push('/child')">📋 我的任务</a>
-      <a class="active">🏆 挑战广场</a>
+      <a @click="$router.push('/child')">📋 任务</a>
+      <a class="active">🏆 挑战</a>
+      <a @click="$router.push('/shop')">🛒 商店</a>
+      <a @click="$router.push('/requests')">📝 申请</a>
     </nav>
   </div>
 </template>
@@ -127,4 +129,5 @@ function goBack() {
 }
 .bottom-nav a.active { color: #f39c12; font-weight: 600; }
 </style>
+
 

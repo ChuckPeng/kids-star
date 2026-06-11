@@ -47,6 +47,18 @@ const router = createRouter({
       path: '/my-challenges',
       redirect: '/child',
     },
+    {
+      path: '/shop',
+      name: 'Shop',
+      component: () => import('@/views/child/Shop.vue'),
+      meta: { requiresAuth: true, role: 'child' },
+    },
+    {
+      path: '/requests',
+      name: 'Requests',
+      component: () => import('@/views/child/Requests.vue'),
+      meta: { requiresAuth: true },
+    },
   ],
 })
 
@@ -56,36 +68,22 @@ router.beforeEach(async (to, _from, next) => {
     return next('/login')
   }
 
-  if (token) {
-    const { useAuthStore } = await import('@/stores/auth')
-    const auth = useAuthStore()
-    if (!auth.user) {
-      try {
-        await auth.fetchMe()
-      } catch {
-        return next('/login')
+  if (to.meta.role) {
+    try {
+      const userStr = localStorage.getItem('user')
+      if (userStr) {
+        const user = JSON.parse(userStr)
+        if (to.meta.role === 'parent' && user.role !== 'parent' && user.role !== 'admin') {
+          return next('/child')
+        }
+        if (to.meta.role === 'child' && user.role !== 'child') {
+          return next('/parent')
+        }
       }
-    }
-
-    if (to.meta.role && auth.user?.role !== to.meta.role && auth.user?.role !== 'admin') {
-      if (auth.user?.role === 'parent') return next('/parent')
-      if (auth.user?.role === 'child') return next('/child')
-    }
-
-    if (!to.path.startsWith('/setup') && !to.path.startsWith('/login') && !to.path.startsWith('/register') && !to.path.startsWith('/child-login')) {
-      const { useFamilyStore } = await import('@/stores/family')
-      const f = useFamilyStore()
-      if (!f.family) {
-        try { await f.fetchMyFamily() } catch {}
-      }
-      if (!f.family) {
-        return next('/setup')
-      }
-    }
+    } catch {}
   }
 
   next()
 })
 
 export default router
-

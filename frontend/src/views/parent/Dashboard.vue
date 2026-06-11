@@ -15,6 +15,18 @@
       </div>
     </section>
 
+    <!-- Tab Bar -->
+    <section class="section">
+      <div class="tab-bar">
+        <button :class="{ active: tab === 'tasks' }" @click="tab = 'tasks'">📋 任务</button>
+        <button :class="{ active: tab === 'rewards' }" @click="tab = 'rewards'; fetchRewards()">🎁 奖励</button>
+        <button :class="{ active: tab === 'review' }" @click="tab = 'review'; fetchAllReviews()">✅ 审核</button>
+        <button :class="{ active: tab === 'stats' }" @click="tab = 'stats'; fetchStats()">📊 统计</button>
+      </div>
+    </section>
+
+    <template v-if="tab === 'tasks'">
+
     <!-- Children -->
     <section class="section">
       <div class="section-header">
@@ -126,6 +138,131 @@
       </div>
       <p v-if="!loading && challengeTasks.length === 0" class="empty">暂无挑战任务，发布一个到挑战广场吧！</p>
     </section>
+
+    <!-- Review Modal -->
+
+    </template>
+
+    <!-- ========== Rewards Tab ========== -->
+    <template v-if="tab === 'rewards'">
+    <section class="section">
+      <div class="section-header">
+        <h3>奖励商品管理</h3>
+        <button class="btn primary small" @click="showRewardForm = !showRewardForm">
+          {{ showRewardForm ? '取消' : '+ 添加商品' }}
+        </button>
+      </div>
+      <div v-if="showRewardForm" class="create-form">
+        <input v-model="rewardForm.name" placeholder="商品名称（如：30分钟游戏时间）" />
+        <textarea v-model="rewardForm.description" placeholder="描述（可选）" rows="2"></textarea>
+        <div class="form-row">
+          <input v-model.number="rewardForm.points_cost" type="number" placeholder="所需星星" min="1" />
+          <input v-model.number="rewardForm.stock" type="number" placeholder="库存(-1无限)" min="-1" />
+        </div>
+        <button class="btn primary" @click="doCreateReward" :disabled="!rewardForm.name">创建</button>
+      </div>
+      <div v-for="r in rewardList" :key="r.id" class="task-card">
+        <div class="task-header">
+          <strong>{{ r.name }}</strong>
+          <span class="task-points">⭐{{ r.points_cost }}</span>
+        </div>
+        <p v-if="r.description" class="task-desc">{{ r.description }}</p>
+        <div class="task-actions">
+          <span class="task-status">库存: {{ r.stock === -1 ? '无限' : r.stock }}</span>
+          <div class="action-btns">
+            <button class="btn secondary small" @click="editReward(r)">编辑</button>
+            <button class="btn danger small" @click="delReward(r.id)">下架</button>
+          </div>
+        </div>
+      </div>
+      <p v-if="rewardList.length === 0" class="empty">还没有商品，添加一些奖励吧</p>
+    </section>
+    </template>
+
+    <!-- ========== Review Tab ========== -->
+    <template v-if="tab === 'review'">
+    <section class="section">
+      <div class="section-header"><h3>兑换审核</h3></div>
+      <div v-for="rd in redemptionList" :key="rd.id" class="task-card">
+        <div class="task-header">
+          <strong>{{ rd.child_name }} 兑换 {{ rd.reward_name }}</strong>
+          <span class="task-points">⭐{{ rd.points_spent }}</span>
+        </div>
+        <span class="sub-status" :class="rd.status">{{ rd.status === 'pending' ? '待审核' : rd.status === 'approved' ? '已通过' : '已拒绝' }}</span>
+        <div v-if="rd.status === 'pending'" class="review-actions">
+          <button class="btn success small" @click="approveRedemption(rd.id)">通过</button>
+          <button class="btn danger small" @click="rejectRedemption(rd.id)">拒绝</button>
+        </div>
+      </div>
+      <p v-if="redemptionList.length === 0" class="empty">暂无兑换申请</p>
+    </section>
+
+    <section class="section">
+      <div class="section-header"><h3>申请审核</h3></div>
+      <div v-for="a in appList" :key="a.id" class="task-card">
+        <div class="task-header">
+          <span class="task-badge" :class="a.type === 'reward' ? 'challenge' : 'required'">
+            {{ a.type === 'reward' ? '奖励' : '提议' }}
+          </span>
+          <strong>{{ a.child_name }}: {{ a.title }}</strong>
+          <span class="task-points">⭐{{ a.points_requested }}</span>
+        </div>
+        <p v-if="a.description" class="task-desc">{{ a.description }}</p>
+        <span class="sub-status" :class="a.status">{{ a.status === 'pending' ? '待审核' : a.status === 'approved' ? '已通过' : '已拒绝' }}</span>
+        <div v-if="a.status === 'pending'" class="review-actions">
+          <input v-model="appPoints[a.id]" type="number" :placeholder="'星星('+a.points_requested+')'" min="1" class="pts-input" />
+          <button class="btn success small" @click="approveApp(a)">通过</button>
+          <button class="btn danger small" @click="rejectApp(a)">拒绝</button>
+        </div>
+      </div>
+      <p v-if="appList.length === 0" class="empty">暂无申请</p>
+    </section>
+    </template>
+
+    <!-- ========== Stats Tab ========== -->
+    <template v-if="tab === 'stats'">
+    <section class="section">
+      <div class="section-header"><h3>家庭统计</h3></div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-num">{{ statsData.total_tasks_created }}</div><div class="stat-label">总任务数</div></div>
+        <div class="stat-card"><div class="stat-num">{{ statsData.active_required }}</div><div class="stat-label">活跃必修</div></div>
+        <div class="stat-card"><div class="stat-num">{{ statsData.active_challenges }}</div><div class="stat-label">活跃挑战</div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header"><h3>孩子表现</h3></div>
+      <div v-for="c in statsData.children" :key="c.child_id" class="task-card">
+        <div class="task-header">
+          <strong>{{ c.child_name }}</strong>
+          <span class="task-points">⭐ {{ c.total_points }}</span>
+        </div>
+        <div class="stats-row">
+          <span>必修完成率: <b>{{ c.required_completion_rate }}%</b></span>
+          <span>已完成: <b class="green">{{ c.approved_count }}</b></span>
+          <span>已拒绝: <b class="red">{{ c.rejected_count }}</b></span>
+          <span>挑战参与: <b>{{ c.challenge_count }}</b></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Manual Penalty -->
+    <section class="section">
+      <div class="section-header"><h3>手动扣星</h3></div>
+      <div class="create-form">
+        <select v-model="penalty.child_id">
+          <option value="">选择孩子</option>
+          <option v-for="c in children" :key="c.id" :value="c.id">{{ c.nickname || c.name }}</option>
+        </select>
+        <div class="form-row">
+          <input v-model.number="penalty.amount" type="number" placeholder="扣除星星数" min="1" />
+        </div>
+        <input v-model="penalty.reason" placeholder="扣星原因" />
+        <button class="btn danger" @click="doPenalty" :disabled="!penalty.child_id || !penalty.amount">确认扣星</button>
+        <p v-if="penaltyMsg" :class="penaltyMsgType">{{ penaltyMsg }}</p>
+      </div>
+    </section>
+    </template>
 
     <!-- Review Modal -->
     <div v-if="reviewTask" class="modal" @click.self="closeReview">
@@ -376,6 +513,67 @@ async function doReject(sub: any) {
   }
 }
 
+// ── Tab data fetchers ──
+async function fetchRewards() {
+  try { const resp = await api.get("/rewards"); rewardList.value = resp.data } catch {}
+}
+async function fetchAllReviews() {
+  try {
+    const rdResp = await api.get("/rewards/redemptions")
+    const appResp = await api.get("/applications")
+    redemptionList.value = rdResp.data; appList.value = appResp.data
+  } catch {}
+}
+async function fetchStats() {
+  try { const resp = await api.get("/stats/family"); statsData.value = resp.data } catch {}
+}
+
+// ── Reward CRUD ──
+async function doCreateReward() {
+  try {
+    await api.post("/rewards", rewardForm.value)
+    rewardForm.value = { name: "", description: "", points_cost: 10, stock: -1 }
+    showRewardForm.value = false
+    await fetchRewards()
+  } catch {}
+}
+async function delReward(id: string) {
+  try { await api.delete("/rewards/" + id); await fetchRewards() } catch {}
+}
+
+// ── Redemption review ──
+async function approveRedemption(id: string) {
+  try { await api.post("/rewards/redemptions/" + id + "/review", { status_req: "approved" }); await fetchAllReviews() } catch {}
+}
+async function rejectRedemption(id: string) {
+  try { await api.post("/rewards/redemptions/" + id + "/review", { status_req: "rejected" }); await fetchAllReviews() } catch {}
+}
+
+// ── Application review ──
+async function approveApp(a: any) {
+  try {
+    await api.post("/applications/" + a.id + "/review", { status: "approved", points_approved: appPoints.value[a.id] || a.points_requested })
+    await fetchAllReviews()
+  } catch {}
+}
+async function rejectApp(a: any) {
+  try { await api.post("/applications/" + a.id + "/review", { status: "rejected" }); await fetchAllReviews() } catch {}
+}
+
+// ── Manual penalty ──
+async function doPenalty() {
+  penaltyMsg.value = ""
+  try {
+    await api.post("/stats/penalty", penalty.value)
+    penaltyMsg.value = "扣星成功"; penaltyMsgType.value = "success"
+    penalty.value = { child_id: "", amount: 5, reason: "" }
+    await familyStore.fetchMyFamily()
+    if (tab.value === "stats") await fetchStats()
+  } catch (e: any) {
+    penaltyMsg.value = e.response?.data?.detail || "操作失败"; penaltyMsgType.value = "error"
+  }
+}
+
 // ── Edit Task ──
 function openEdit(task: any) {
   editingTask.value = task
@@ -532,7 +730,26 @@ async function refreshReviewData() {
 .edit-form { display: flex; flex-direction: column; gap: 8px; }
 .edit-form label { font-size: 13px; font-weight: 600; color: #555; }
 .edit-form input, .edit-form select, .edit-form textarea { padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 14px; font-family: inherit; }
-.msg.error { color: #e74c3c; }`n</style>
+.msg.error { color: #e74c3c; }`n
+/* Tabs */
+.tab-bar { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab-bar button { flex: 1; min-width: 60px; padding: 8px 6px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; background: white; color: #888; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.tab-bar button.active { background: #667eea; color: white; }
+
+/* Stats */
+.stats-grid { display: flex; gap: 10px; }
+.stat-card { flex: 1; background: white; border-radius: 10px; padding: 16px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.stat-num { font-size: 28px; font-weight: 700; color: #667eea; }
+.stat-label { font-size: 12px; color: #999; margin-top: 4px; }
+.stats-row { display: flex; flex-wrap: wrap; gap: 10px; font-size: 13px; color: #666; margin-top: 8px; }
+.stats-row .green { color: #27ae60; }
+.stats-row .red { color: #e74c3c; }
+
+/* Penalty */
+.pts-input { width: 70px; padding: 6px 8px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 13px; }`n</style>
+
+
+
 
 
 

@@ -26,17 +26,18 @@ export const useAuthStore = defineStore('auth', () => {
   async function fetchMe() {
     try {
       const { data } = await api.get('/auth/me')
-      user.value = data
+      user.value = data; localStorage.setItem('user', JSON.stringify(data))
     } catch {
-      user.value = null
+      user.value = null; localStorage.removeItem('user')
     }
   }
 
   function logout() {
     localStorage.clear()
-    user.value = null
+    user.value = null; localStorage.removeItem('user')
     window.location.href = '/login'
   }
 
   return { user, loading, isLoggedIn, isParent, isChild, login, register, fetchMe, logout }
 })
+
