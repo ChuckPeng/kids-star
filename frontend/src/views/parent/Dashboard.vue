@@ -409,6 +409,19 @@ const editMsg = ref('')
 const editMsgType = ref('success')
 const deletingTask = ref<any>(null)
 const deleteMsg = ref('')
+const tab = ref('tasks')
+const showRewardForm = ref(false)
+const rewardForm = ref({ name: '', description: '', points_cost: 10, stock: -1 })
+const rewardList = ref<any[]>([])
+const redemptionList = ref<any[]>([])
+const appList = ref<any[]>([])
+const appPoints = ref<Record<string, number>>({})
+const statsData = ref<any>({ children: [], total_tasks_created: 0, active_required: 0, active_challenges: 0 })
+const penalty = ref({ child_id: '', amount: 5, reason: '' })
+const penaltyMsg = ref('')
+const penaltyMsgType = ref('success')
+const showTemplates = ref(false)
+const templateList = ref<any[]>([])
 const { unreadCount, notifications: notificationList, fetchAll: fetchNotifs, markRead: markNotifRead, markAllRead: markAllNotifsRead, fetchUnread } = useNotifications()
 const showNotifs = ref(false)
 
@@ -802,6 +815,7 @@ async function refreshReviewData() {
 .repeat-badge { font-size: 11px; background: #e8f8e8; color: #27ae60; padding: 2px 6px; border-radius: 4px; margin-left: 6px; }
 
 </style>
+
 
 
 
