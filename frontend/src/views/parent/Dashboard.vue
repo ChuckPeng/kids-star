@@ -29,15 +29,15 @@
       </div>
     </section>
 
-    <!-- Tab Bar -->
-    <section class="section">
-      <div class="tab-bar">
-        <button :class="{ active: tab === 'tasks' }" @click="tab = 'tasks'">📋 任务</button>
-        <button :class="{ active: tab === 'rewards' }" @click="tab = 'rewards'; fetchRewards()">🎁 奖励</button>
-        <button :class="{ active: tab === 'review' }" @click="tab = 'review'; fetchAllReviews()">✅ 审核</button>
-        <button :class="{ active: tab === 'stats' }" @click="tab = 'stats'; fetchStats()">📊 统计</button>
-      </div>
-    </section>
+    <!-- Sidebar Layout -->
+    <div class="main-layout">
+      <nav class="sidebar">
+        <a :class="{ active: tab === 'tasks' }" @click="tab = 'tasks'">📋 任务</a>
+        <a :class="{ active: tab === 'rewards' }" @click="tab = 'rewards'; fetchRewards()">🎁 奖励</a>
+        <a :class="{ active: tab === 'review' }" @click="tab = 'review'; fetchAllReviews()">✅ 审核</a>
+        <a :class="{ active: tab === 'stats' }" @click="tab = 'stats'; fetchStats()">📊 统计</a>
+      </nav>
+      <div class="main-content">
 
     <template v-if="tab === 'tasks'">
 
@@ -85,7 +85,7 @@
             <option value="weekly">每周</option>
             <option value="monthly">每月</option>
           </select>
-          <input v-model.number="form.base_points" type="number" placeholder="星星数" min="1" max="100" />
+          <input v-model.number="form.base_points" type="number" placeholder="星星数" min="1" max="100" /><span class="star-suffix">⭐</span>
         </div>
         <div v-if="form.difficulty === 'required' && children.length > 0" class="member-select">
           <span class="label">分配给:</span>
@@ -143,7 +143,7 @@
         <div class="task-header">
           <span class="task-badge challenge">挑战</span>
           <strong>{{ t.title }}</strong>
-          <span class="task-points">⭐{{ t.base_points }} ×{{ getMultiplier(t) }} = {{ getTotalPoints(t) }}</span>
+          <span class="task-points">⭐{{ t.base_points }}</span>
         </div>
         <p v-if="t.description" class="task-desc">{{ t.description }}</p>
         <div class="challenge-meta">
@@ -287,6 +287,9 @@
       </div>
     </section>
     </template>
+
+      </div><!-- /main-content -->
+    </div><!-- /main-layout -->
 
     <!-- Review Modal -->
     <div v-if="reviewTask" class="modal" @click.self="closeReview">
@@ -436,14 +439,6 @@ const challengeTasks = computed(() => tasks.value.filter((t: any) => t.difficult
 function getChildName(cid: string): string {
   const child = children.value.find((c: any) => c.id === cid || c.user_id === cid)
   return child?.nickname || child?.name || '未知'
-}
-
-function getMultiplier(task: any): number {
-  return task.challenge_multiplier || 1.5
-}
-
-function getTotalPoints(task: any): number {
-  return Math.floor(task.base_points * getMultiplier(task))
 }
 
 function getClaimCount(taskId: string): number {
@@ -785,10 +780,20 @@ async function refreshReviewData() {
 .edit-form label { font-size: 13px; font-weight: 600; color: #555; }
 .edit-form input, .edit-form select, .edit-form textarea { padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 14px; font-family: inherit; }
 .msg.error { color: #e74c3c; }`n
-/* Tabs */
-.tab-bar { display: flex; gap: 6px; flex-wrap: wrap; }
-.tab-bar button { flex: 1; min-width: 60px; padding: 8px 6px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; background: white; color: #888; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-.tab-bar button.active { background: #667eea; color: white; }
+/* Sidebar Layout */
+.main-layout { display: flex; min-height: calc(100vh - 100px); }
+.sidebar { width: 80px; background: white; box-shadow: 1px 0 3px rgba(0,0,0,0.06); display: flex; flex-direction: column; padding: 8px 0; flex-shrink: 0; }
+.sidebar a { padding: 14px 8px; text-align: center; font-size: 12px; color: #888; cursor: pointer; text-decoration: none; border-left: 3px solid transparent; transition: all 0.2s; }
+.sidebar a:hover { background: #f5f6fa; }
+.sidebar a.active { background: #e8f0fe; color: #667eea; border-left-color: #667eea; font-weight: 600; }
+.main-content { flex: 1; min-width: 0; }
+.star-suffix { font-size: 18px; margin-left: 4px; }
+@media (max-width: 600px) {
+  .main-layout { flex-direction: column; }
+  .sidebar { width: 100%; flex-direction: row; overflow-x: auto; padding: 0; }
+  .sidebar a { flex: 1; padding: 10px 4px; border-left: none; border-bottom: 3px solid transparent; white-space: nowrap; }
+  .sidebar a.active { border-left: none; border-bottom-color: #667eea; }
+}
 
 /* Stats */
 .stats-grid { display: flex; gap: 10px; }
@@ -815,6 +820,7 @@ async function refreshReviewData() {
 .repeat-badge { font-size: 11px; background: #e8f8e8; color: #27ae60; padding: 2px 6px; border-radius: 4px; margin-left: 6px; }
 
 </style>
+
 
 
 
