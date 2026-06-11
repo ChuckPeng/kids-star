@@ -3,9 +3,23 @@
     <header class="header">
       <h1>{{ family?.name || 'Kids-Star' }}</h1>
       <div class="header-actions">
-        <button class="btn-sm" @click="auth.logout()">退出</button>
+        <button class="btn-sm bell-btn" @click="showNotifs = !showNotifs; fetchNotifs()">🔔<span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span></button><button class="btn-sm" @click="auth.logout()">退出</button>
       </div>
     </header>
+
+    <!-- Notification dropdown -->
+    <div v-if="showNotifs" class="notif-dropdown">
+      <div class="notif-header">
+        <strong>通知</strong>
+        <button class="btn-sm-outline" @click="markAllNotifsRead">全部已读</button>
+      </div>
+      <div v-for="n in notificationList" :key="n.id" class="notif-item" :class="{ unread: !n.is_read }" @click="markNotifRead(n.id)">
+        <strong>{{ n.title }}</strong>
+        <p v-if="n.body">{{ n.body }}</p>
+        <span class="notif-time">{{ formatTime(n.created_at) }}</span>
+      </div>
+      <p v-if="notificationList.length === 0" class="empty">暂无通知</p>
+    </div>
 
     <!-- Invite code -->
     <section class="section">
@@ -65,6 +79,12 @@
             <option value="required">必修任务</option>
             <option value="challenge">挑战任务</option>
           </select>
+          <select v-model="form.repeat_type">
+            <option value="once">一次性</option>
+            <option value="daily">每日</option>
+            <option value="weekly">每周</option>
+            <option value="monthly">每月</option>
+          </select>
           <input v-model.number="form.base_points" type="number" placeholder="星星数" min="1" max="100" />
         </div>
         <div v-if="form.difficulty === 'required' && children.length > 0" class="member-select">
@@ -101,6 +121,8 @@
         </div>
         <div class="task-actions">
           <span class="task-status">{{ statusLabel(t.status) }}</span>
+          <span v-if="t.repeat_type && t.repeat_type !== 'once'" class="repeat-badge">{{ t.repeat_type === 'daily' ? '每日' : t.repeat_type === 'weekly' ? '每周' : '每月' }}</span>
+          <span v-if="t.repeat_type && t.repeat_type !== 'once'" class="repeat-badge">{{ t.repeat_type === 'daily' ? '每日' : t.repeat_type === 'weekly' ? '每周' : '每月' }}</span>
           <div class="action-btns">
             <button class="btn secondary small" @click="openReview(t)">查看提交</button>
             <button class="btn outline small" @click="openEdit(t)">编辑</button>
@@ -129,6 +151,8 @@
         </div>
         <div class="task-actions">
           <span class="task-status">{{ statusLabel(t.status) }}</span>
+          <span v-if="t.repeat_type && t.repeat_type !== 'once'" class="repeat-badge">{{ t.repeat_type === 'daily' ? '每日' : t.repeat_type === 'weekly' ? '每周' : '每月' }}</span>
+          <span v-if="t.repeat_type && t.repeat_type !== 'once'" class="repeat-badge">{{ t.repeat_type === 'daily' ? '每日' : t.repeat_type === 'weekly' ? '每周' : '每月' }}</span>
           <div class="action-btns">
             <button class="btn secondary small" @click="openReview(t)">查看提交</button>
             <button class="btn outline small" @click="openEdit(t)">编辑</button>
@@ -359,6 +383,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api/client'
+import { useNotifications } from '@/composables/useNotifications'
 
 const familyStore = useFamilyStore()
 const auth = useAuthStore()
@@ -384,9 +409,11 @@ const editMsg = ref('')
 const editMsgType = ref('success')
 const deletingTask = ref<any>(null)
 const deleteMsg = ref('')
+const { unreadCount, notifications: notificationList, fetchAll: fetchNotifs, markRead: markNotifRead, markAllRead: markAllNotifsRead, fetchUnread } = useNotifications()
+const showNotifs = ref(false)
 
 const childForm = ref({ nickname: '' })
-const form = ref({ title: '', description: '', difficulty: 'required', base_points: 5, assigned_to: [] as string[] })
+const form = ref({ title: '', description: '', difficulty: 'required', base_points: 5, assigned_to: [] as string[], task_type: 'custom', repeat_type: 'once' })
 
 const children = computed(() => family.value?.members?.filter((m: any) => m.role === 'child') || [])
 
@@ -449,7 +476,7 @@ async function doAddChild() {
 
 async function doCreateTask() {
   await familyStore.createTask(form.value)
-  form.value = { title: '', description: '', difficulty: 'required', base_points: 5, assigned_to: [] }
+  form.value = { title: '', description: '', difficulty: 'required', base_points: 5, assigned_to: [], task_type: 'custom', repeat_type: 'once' }
   showCreate.value = false
   await familyStore.fetchTasks()
   tasks.value = familyStore.tasks
@@ -572,6 +599,20 @@ async function doPenalty() {
   } catch (e: any) {
     penaltyMsg.value = e.response?.data?.detail || "操作失败"; penaltyMsgType.value = "error"
   }
+}
+
+// ── Templates ──
+async function fetchTemplates() {
+  try { const resp = await api.get("/templates"); templateList.value = resp.data } catch {}
+}
+function useTemplate(t: any) {
+  form.value.title = t.title
+  form.value.description = t.description || ""
+  form.value.difficulty = t.difficulty
+  form.value.base_points = t.base_points
+  form.value.task_type = t.task_type
+  form.value.repeat_type = t.repeat_type
+  showTemplates.value = false
 }
 
 // ── Edit Task ──
@@ -746,7 +787,24 @@ async function refreshReviewData() {
 .stats-row .red { color: #e74c3c; }
 
 /* Penalty */
-.pts-input { width: 70px; padding: 6px 8px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 13px; }`n</style>
+.pts-input { width: 70px; padding: 6px 8px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 13px; }`n/* Notification */
+.bell-btn { position: relative; }
+.badge { position: absolute; top: -4px; right: -6px; background: #e74c3c; color: white; font-size: 10px; padding: 1px 5px; border-radius: 10px; min-width: 16px; text-align: center; }
+.notif-dropdown { position: fixed; top: 56px; right: 8px; left: 8px; max-width: 400px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 200; max-height: 60vh; overflow-y: auto; }
+.notif-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid #eee; }
+.notif-header strong { font-size: 16px; }
+.notif-item { padding: 12px 16px; border-bottom: 1px solid #f5f5f5; cursor: pointer; }
+.notif-item.unread { background: #f0f4ff; }
+.notif-item strong { font-size: 14px; display: block; }
+.notif-item p { color: #666; font-size: 12px; margin: 4px 0; }
+.notif-time { font-size: 11px; color: #999; }
+
+.repeat-badge { font-size: 11px; background: #e8f8e8; color: #27ae60; padding: 2px 6px; border-radius: 4px; margin-left: 6px; }
+
+</style>
+
+
+
 
 
 

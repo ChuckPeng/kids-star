@@ -10,6 +10,8 @@ from app.api.v1.challenges import router as challenges_router
 from app.api.v1.rewards import router as rewards_router
 from app.api.v1.applications import router as applications_router
 from app.api.v1.statistics import router as statistics_router
+from app.api.v1.notifications_api import router as notifications_router
+from app.api.v1.templates import router as templates_router
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -43,8 +45,12 @@ app.include_router(challenges_router, prefix="/api/v1")
 app.include_router(rewards_router, prefix="/api/v1")
 app.include_router(applications_router, prefix="/api/v1")
 app.include_router(statistics_router, prefix="/api/v1")
+app.include_router(notifications_router, prefix="/api/v1")
+app.include_router(templates_router, prefix="/api/v1")
 
 
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "app": settings.APP_NAME, "version": settings.APP_VERSION}
+
+

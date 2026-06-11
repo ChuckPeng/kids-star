@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
 from app.models.models import User, FamilyMember, Reward, Redemption
+from app.utils.notify import notify_redemption_reviewed
 from app.schemas.task import RewardCreate, RewardResponse, RedemptionResponse
 
 router = APIRouter(prefix="/rewards", tags=["rewards"])
@@ -130,8 +131,10 @@ async def review_redemption(
         r2 = await db.execute(select(FamilyMember).where(FamilyMember.family_id == member.family_id, FamilyMember.user_id == rd.child_id))
         cm = r2.scalar_one_or_none()
         if cm: cm.points -= rd.points_spent
+    await notify_redemption_reviewed(db, rd.child_id, rname, status_req)
     await db.flush(); await db.refresh(rd)
     rname = (await db.execute(select(Reward.name).where(Reward.id == rd.reward_id))).scalar_one_or_none()
     return RedemptionResponse(id=rd.id, child_id=rd.child_id, child_name=await _child_name(rd.child_id, db),
             reward_id=rd.reward_id, reward_name=rname, points_spent=rd.points_spent,
             status=rd.status, parent_note=rd.parent_note, redeemed_at=rd.redeemed_at, reviewed_at=rd.reviewed_at)
+

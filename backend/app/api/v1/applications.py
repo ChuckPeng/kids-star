@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
 from app.models.models import User, FamilyMember, RewardApplication, TaskProposal, Task
+from app.utils.notify import notify_application_reviewed
 from app.schemas.task import (
     RewardApplicationCreate, TaskProposalCreate, ApplicationResponse, ApplicationReview,
 )
@@ -145,6 +146,7 @@ async def review_application(
             r2 = await db.execute(select(FamilyMember).where(FamilyMember.family_id == member.family_id, FamilyMember.user_id == reward_app.child_id))
             cm = r2.scalar_one_or_none()
             if cm: cm.points += pts
+        await notify_application_reviewed(db, reward_app.child_id, reward_app.title, data.status)
         await db.flush(); await db.refresh(reward_app)
         return ApplicationResponse(id=reward_app.id, type="reward", child_id=reward_app.child_id,
             child_name=await _child_name(reward_app.child_id, db),
@@ -165,6 +167,7 @@ async def review_application(
     if data.status == "approved":
         pts = data.points_approved or prop.points_requested
         prop.points_approved = pts
+        await notify_application_reviewed(db, prop.child_id, prop.title, data.status)
         # Auto-create challenge task
         task = Task(
             family_id=member.family_id, title=prop.title,
@@ -184,3 +187,4 @@ async def review_application(
         points_approved=prop.points_approved,
         status=prop.status, parent_note=prop.parent_note,
         submitted_at=prop.submitted_at, reviewed_at=prop.reviewed_at)
+

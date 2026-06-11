@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
 from app.models.models import User, Family, FamilyMember, Task, Submission
+from app.utils.notify import notify_task_reviewed, notify_task_submitted
 from app.schemas.task import (
     TaskCreate, TaskUpdate, TaskResponse,
     SubmissionCreate, SubmissionReview, SubmissionResponse,
@@ -236,6 +237,9 @@ async def review_submission(
         if child_member:
             child_member.points += submission.points_earned
 
+    # Send notification to child
+    await notify_task_reviewed(db, submission.child_id, task.title, data.status, data.parent_note)
+
     await db.flush()
     await db.refresh(submission)
     return SubmissionResponse(
@@ -335,3 +339,4 @@ async def upload_photo(
 ):
     """Returns a placeholder - actual upload handled via base64 in submission body"""
     return {"uploaded": True}
+

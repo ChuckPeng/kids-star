@@ -4,9 +4,17 @@
       <h1>我的任务</h1>
       <div class="header-actions">
         <span class="points">⭐ {{ myPoints }}</span>
-        <button class="btn-sm" @click="auth.logout()">退出</button>
+        <button class="btn-sm bell-btn" @click="showNotifs = !showNotifs; fetchNotifs()">🔔<span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span></button><button class="btn-sm" @click="auth.logout()">退出</button>
       </div>
     </header>
+
+    <div v-if="showNotifs" class="notif-dropdown" @click.self="showNotifs = false">
+      <div class="notif-header"><strong>通知</strong><button class="btn-sm-outline" @click="markAllNotifsRead">全部已读</button></div>
+      <div v-for="n in notificationList" :key="n.id" class="notif-item" :class="{ unread: !n.is_read }" @click="markNotifRead(n.id)">
+        <strong>{{ n.title }}</strong><p v-if="n.body">{{ n.body }}</p><span class="notif-time">{{ formatNotifTime(n.created_at) }}</span>
+      </div>
+      <p v-if="notificationList.length === 0" class="empty">暂无通知</p>
+    </div>
 
     <!-- ========== 必修任务 ========== -->
     <section class="section">
@@ -83,6 +91,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api/client'
+import { useNotifications } from '@/composables/useNotifications'
 
 const familyStore = useFamilyStore()
 const auth = useAuthStore()
@@ -91,6 +100,9 @@ const allTasks = ref<any[]>([])
 const myChallenges = ref<any[]>([])
 const loading = ref(false)
 const taskMsgs = ref(new Map<string, string>())
+const { unreadCount, notifications: notificationList, fetchAll: fetchNotifs, markRead: markNotifRead, markAllRead: markAllNotifsRead, fetchUnread } = useNotifications()
+const showNotifs = ref(false)
+function formatNotifTime(t: string) { return t ? new Date(t).toLocaleString('zh-CN') : '' }
 const mySubmissions = ref<Map<string, any>>(new Map())
 
 const requiredTasks = computed(() => allTasks.value.filter((t: any) => t.difficulty === 'required'))
@@ -209,5 +221,17 @@ async function doResubmit(task: any) {
   color: #888; cursor: pointer; text-decoration: none;
 }
 .bottom-nav a.active { color: #667eea; font-weight: 600; }
+.bell-btn { position: relative; }
+.badge { position: absolute; top: -4px; right: -6px; background: #e74c3c; color: white; font-size: 10px; padding: 1px 5px; border-radius: 10px; min-width: 16px; text-align: center; }
+.notif-dropdown { position: fixed; top: 56px; right: 8px; left: 8px; max-width: 400px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 200; max-height: 60vh; overflow-y: auto; }
+.notif-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid #eee; }
+.notif-header strong { font-size: 16px; }
+.notif-item { padding: 12px 16px; border-bottom: 1px solid #f5f5f5; cursor: pointer; }
+.notif-item.unread { background: #f0f4ff; }
+.notif-item strong { font-size: 14px; display: block; }
+.notif-item p { color: #666; font-size: 12px; margin: 4px 0; }
+.notif-time { font-size: 11px; color: #999; }
+
 </style>
+
 
